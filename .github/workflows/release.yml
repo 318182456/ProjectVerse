@@ -61,6 +61,11 @@ jobs:
           git tag "$VERSION"
           git push origin "$VERSION"
 
+      - name: Package Release ZIP
+        if: steps.check_tag.outputs.tag_exists == 'false'
+        run: |
+          zip -r projectVerse-${{ steps.get_version.outputs.version }}.zip main.js manifest.json styles.css
+
       - name: Create GitHub Release
         if: steps.check_tag.outputs.tag_exists == 'false'
         uses: softprops/action-gh-release@v2
@@ -71,5 +76,6 @@ jobs:
             manifest.json
             main.js
             styles.css
+            projectVerse-${{ steps.get_version.outputs.version }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
