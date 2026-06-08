@@ -16,7 +16,7 @@ interface VirtualNode {
 export class SpaceExplorerView extends ItemView {
   private spaceManager: SpaceManager;
   private searchKeyword: string = '';
-  private expandedPaths: Set<string> = new Set<string>();
+  private collapsedPaths: Set<string> = new Set<string>();
 
   constructor(leaf: WorkspaceLeaf, spaceManager: SpaceManager) {
     super(leaf);
@@ -248,7 +248,7 @@ export class SpaceExplorerView extends ItemView {
       const childNode = node.children.get(key)!;
       
       // Determine if folder should be expanded
-      const isExpanded = this.expandedPaths.has(childNode.path) || depth === 0;
+      const isExpanded = !this.collapsedPaths.has(childNode.path);
 
       const nodeEl = parentEl.createDiv({ 
         cls: `vps-tree-node vps-tree-node-depth-${depth}` 
@@ -298,10 +298,10 @@ export class SpaceExplorerView extends ItemView {
       if (childNode.isFolder) {
         nodeEl.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (this.expandedPaths.has(childNode.path)) {
-            this.expandedPaths.delete(childNode.path);
+          if (this.collapsedPaths.has(childNode.path)) {
+            this.collapsedPaths.delete(childNode.path);
           } else {
-            this.expandedPaths.add(childNode.path);
+            this.collapsedPaths.add(childNode.path);
           }
           this.render();
         });

@@ -72,9 +72,9 @@
 .vps-space-item {
   display: flex;
   align-items: center;
-  padding: 10px 14px;
-  margin-bottom: 8px;
-  border-radius: var(--vps-border-radius);
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
   border: 1px solid var(--vps-card-border);
   background-color: var(--vps-card-bg);
   backdrop-filter: blur(var(--vps-blur));
@@ -84,7 +84,7 @@
 }
 
 .vps-space-item:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   background-color: var(--vps-card-hover-bg);
   border-color: var(--vps-card-hover-border);
   box-shadow: var(--vps-glow-shadow);
@@ -92,38 +92,47 @@
 
 .vps-space-item.is-active {
   border-color: var(--space-color, var(--interactive-accent));
-  box-shadow: 0 0 12px rgba(var(--space-color-rgb, var(--interactive-accent-rgb)), 0.2);
+  box-shadow: 0 0 8px rgba(var(--space-color-rgb, var(--interactive-accent-rgb)), 0.15);
 }
 
 .vps-space-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  margin-right: 12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  margin-right: 8px;
   color: #fff;
   background-color: var(--space-color, var(--interactive-accent));
   transition: var(--vps-transition);
+  font-size: 0.85em;
 }
 
 .vps-space-info {
   flex-grow: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .vps-space-name {
   font-weight: 600;
-  font-size: 0.95em;
+  font-size: 0.88em;
   color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
 }
 
 .vps-space-meta {
   font-size: 0.75em;
   color: var(--vps-text-muted);
-  margin-top: 2px;
+  margin-top: 0;
+  margin-left: 8px;
+  white-space: nowrap;
 }
 
 .vps-space-actions {

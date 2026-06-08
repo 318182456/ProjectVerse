@@ -12,10 +12,19 @@ interface SpaceTask {
   rawLine: string;
 }
 
+interface VirtualNode {
+  name: string;
+  path: string;
+  isFolder: boolean;
+  children: Map<string, VirtualNode>;
+  file?: TFile;
+}
+
 export class SpaceDashboardView extends ItemView {
   private spaceManager: SpaceManager;
   private spaceId?: string;
   private tasks: SpaceTask[] = [];
+  private collapsedPaths: Set<string> = new Set<string>();
 
   constructor(leaf: WorkspaceLeaf, spaceManager: SpaceManager) {
     super(leaf);
@@ -128,24 +137,13 @@ export class SpaceDashboardView extends ItemView {
     addNoteBtn.addEventListener('click', () => this.createNewSpaceNote(space));
 
     const filesList = filesCard.createDiv();
-    filesList.style.cssText = 'max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
+    filesList.style.cssText = 'max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;';
     const allSpaceFiles = this.spaceManager.getSpaceFiles(space.id);
     if (allSpaceFiles.length === 0) {
       filesList.createDiv({ text: '当前空间无文件', cls: 'vps-space-meta' });
     } else {
-      allSpaceFiles.forEach(file => {
-        const fileRow = filesList.createDiv({ cls: 'vps-task-item' });
-        const iconEl = fileRow.createDiv();
-        iconEl.style.cssText = 'display:flex;align-items:center;';
-        setIcon(iconEl, 'file-text');
-        
-        const fileLink = fileRow.createDiv({ cls: 'vps-task-text', text: file.name });
-        fileLink.addEventListener('click', () => {
-          this.app.workspace.getLeaf(false).openFile(file);
-        });
-
-        const pathEl = fileRow.createDiv({ cls: 'vps-task-source', text: file.parent?.path !== '/' ? file.parent?.path : '' });
-      });
+      const rootNode = this.buildVirtualTree(allSpaceFiles);
+      this.renderTreeNodes(filesList, rootNode, 0);
     }
 
     // Card B: Tasks List
@@ -265,6 +263,96 @@ export class SpaceDashboardView extends ItemView {
     // Open the new file
     this.app.workspace.getLeaf(false).openFile(newFile);
     this.render();
+  }
+
+  private buildVirtualTree(files: TFile[]): VirtualNode {
+    const root: VirtualNode = {
+      name: 'root',
+      path: '',
+      isFolder: true,
+      children: new Map<string, VirtualNode>()
+    };
+
+    files.forEach(file => {
+      const parts = file.path.split('/');
+      let current = root;
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const isLast = i === parts.length - 1;
+        const currentPath = parts.slice(0, i + 1).join('/');
+
+        if (isLast) {
+          current.children.set(part, {
+            name: part,
+            path: currentPath,
+            isFolder: false,
+            children: new Map(),
+            file
+          });
+        } else {
+          if (!current.children.has(part)) {
+            current.children.set(part, {
+              name: part,
+              path: currentPath,
+              isFolder: true,
+              children: new Map()
+            });
+          }
+          current = current.children.get(part)!;
+        }
+      }
+    });
+
+    return root;
+  }
+
+  private renderTreeNodes(parentEl: HTMLElement, node: VirtualNode, depth: number) {
+    const sortedKeys = Array.from(node.children.keys()).sort((a, b) => {
+      const nodeA = node.children.get(a)!;
+      const nodeB = node.children.get(b)!;
+      if (nodeA.isFolder && !nodeB.isFolder) return -1;
+      if (!nodeA.isFolder && nodeB.isFolder) return 1;
+      return a.localeCompare(b);
+    });
+
+    sortedKeys.forEach(key => {
+      const childNode = node.children.get(key)!;
+      const isExpanded = !this.collapsedPaths.has(childNode.path);
+
+      const nodeEl = parentEl.createDiv({ 
+        cls: `vps-tree-node vps-tree-node-depth-${depth}` 
+      });
+      
+      const iconEl = nodeEl.createDiv({ cls: 'vps-tree-node-icon' });
+      setIcon(iconEl, childNode.isFolder ? (isExpanded ? 'chevron-down' : 'chevron-right') : 'file-text');
+
+      nodeEl.createDiv({ cls: 'vps-tree-node-name', text: childNode.name });
+
+      if (childNode.isFolder) {
+        nodeEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (this.collapsedPaths.has(childNode.path)) {
+            this.collapsedPaths.delete(childNode.path);
+          } else {
+            this.collapsedPaths.add(childNode.path);
+          }
+          this.render();
+        });
+
+        if (isExpanded) {
+          const childrenContainer = parentEl.createDiv();
+          this.renderTreeNodes(childrenContainer, childNode, depth + 1);
+        }
+      } else {
+        nodeEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (childNode.file) {
+            this.app.workspace.getLeaf(false).openFile(childNode.file);
+          }
+        });
+      }
+    });
   }
 
   // Helper to adjust color brightness
