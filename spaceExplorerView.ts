@@ -83,7 +83,7 @@ export class SpaceExplorerView extends ItemView {
     });
 
     // 3. Space List
-    const activeSpaceId = (this.app as any).plugins?.plugins?.['virtual-project-space']?.settings?.activeSpaceId;
+    const activeSpaceId = (this.app as any).plugins?.plugins?.['projectVerse']?.settings?.activeSpaceId;
     const spaces = this.spaceManager.getSpaces();
 
     const spacesListEl = container.createDiv({ cls: 'vps-spaces-list' });

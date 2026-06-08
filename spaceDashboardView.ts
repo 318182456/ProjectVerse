@@ -37,7 +37,7 @@ export class SpaceDashboardView extends ItemView {
   }
 
   getDisplayText(): string {
-    const activeSpaceId = (this.app as any).plugins?.plugins?.['virtual-project-space']?.settings?.activeSpaceId;
+    const activeSpaceId = (this.app as any).plugins?.plugins?.['projectVerse']?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     if (targetId) {
       const space = this.spaceManager.getSpace(targetId);
@@ -60,7 +60,7 @@ export class SpaceDashboardView extends ItemView {
   }
 
   async render() {
-    const activeSpaceId = (this.app as any).plugins?.plugins?.['virtual-project-space']?.settings?.activeSpaceId;
+    const activeSpaceId = (this.app as any).plugins?.plugins?.['projectVerse']?.settings?.activeSpaceId;
     const targetId = activeSpaceId || this.spaceId;
     this.spaceId = targetId;
 

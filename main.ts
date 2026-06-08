@@ -179,7 +179,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
   }
 
   async loadPluginSettings() {
-    const pluginDir = this.manifest.dir || '.obsidian/plugins/virtual-project-space';
+    const pluginDir = this.manifest.dir || '.obsidian/plugins/projectVerse';
     const dataPath = `${pluginDir}/spaces.json`;
     let loadedData: any = null;
 
@@ -200,7 +200,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
   async savePluginSettings() {
     // Save to the custom path requested
-    const pluginDir = this.manifest.dir || '.obsidian/plugins/virtual-project-space';
+    const pluginDir = this.manifest.dir || '.obsidian/plugins/projectVerse';
     const dataPath = `${pluginDir}/spaces.json`;
     try {
       // Ensure plugin folder exists

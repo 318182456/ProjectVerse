@@ -425,7 +425,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       this.searchKeyword = e.target.value;
       this.render();
     });
-    const activeSpaceId = this.app.plugins?.plugins?.["virtual-project-space"]?.settings?.activeSpaceId;
+    const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
     const spaces = this.spaceManager.getSpaces();
     const spacesListEl = container.createDiv({ cls: "vps-spaces-list" });
     spaces.forEach((space) => {
@@ -632,7 +632,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     return VIEW_TYPE_SPACE_DASHBOARD;
   }
   getDisplayText() {
-    const activeSpaceId = this.app.plugins?.plugins?.["virtual-project-space"]?.settings?.activeSpaceId;
+    const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     if (targetId) {
       const space = this.spaceManager.getSpace(targetId);
@@ -652,7 +652,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     this.render();
   }
   async render() {
-    const activeSpaceId = this.app.plugins?.plugins?.["virtual-project-space"]?.settings?.activeSpaceId;
+    const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
     const targetId = activeSpaceId || this.spaceId;
     this.spaceId = targetId;
     const renderVersion = ++this.currentRenderVersion;
@@ -1078,7 +1078,7 @@ ${names}`);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_DASHBOARD);
   }
   async loadPluginSettings() {
-    const pluginDir = this.manifest.dir || ".obsidian/plugins/virtual-project-space";
+    const pluginDir = this.manifest.dir || ".obsidian/plugins/projectVerse";
     const dataPath = `${pluginDir}/spaces.json`;
     let loadedData = null;
     try {
@@ -1094,7 +1094,7 @@ ${names}`);
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
   }
   async savePluginSettings() {
-    const pluginDir = this.manifest.dir || ".obsidian/plugins/virtual-project-space";
+    const pluginDir = this.manifest.dir || ".obsidian/plugins/projectVerse";
     const dataPath = `${pluginDir}/spaces.json`;
     try {
       if (!await this.app.vault.adapter.exists(pluginDir)) {
