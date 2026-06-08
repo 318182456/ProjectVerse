@@ -1,7 +1,7 @@
 {
   "id": "projectVerse",
   "name": "ProjectVerse",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minAppVersion": "1.0.0",
   "description": "用代码管理项目，让 Obsidian 变成你的超级工作台。",
   "author": "318182456",
