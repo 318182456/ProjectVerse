@@ -1,0 +1,25 @@
+{
+  "name": "obsidian-virtual-project-space",
+  "version": "1.0.0",
+  "description": "Logical Layer Project Space Management for Obsidian.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit && node esbuild.config.mjs production"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "workspace",
+    "project"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "esbuild": "0.19.11",
+    "obsidian": "^1.5.8",
+    "typescript": "^5.3.3",
+    "tslib": "^2.6.2"
+  }
+}

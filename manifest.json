@@ -1,0 +1,10 @@
+{
+  "id": "virtual-project-space",
+  "name": "Virtual Project Space",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Create and manage logical virtual project spaces in Obsidian without modifying physical file structure.",
+  "author": "Antigravity",
+  "authorUrl": "https://github.com/google-deepmind",
+  "isDesktopOnly": false
+}
