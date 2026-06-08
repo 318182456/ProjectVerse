@@ -347,6 +347,30 @@ export class SpaceManager {
 
     return Array.from(tags);
   }
+
+  getSpaceFolders(spaceId: string): TFolder[] {
+    const space = this.getSpace(spaceId);
+    if (!space) return [];
+
+    const allLoaded = this.app.vault.getAllLoadedFiles();
+    const matchedFolders = new Set<TFolder>();
+
+    // Add explicit folders and their subfolders
+    for (const folderPath of space.folders) {
+      const folder = this.app.vault.getAbstractFileByPath(folderPath);
+      if (folder instanceof TFolder) {
+        matchedFolders.add(folder);
+      }
+      // Recursively find all subfolders in vault
+      for (const file of allLoaded) {
+        if (file instanceof TFolder && file.path.startsWith(folderPath === '/' ? '' : folderPath + '/')) {
+          matchedFolders.add(file);
+        }
+      }
+    }
+
+    return Array.from(matchedFolders);
+  }
 }
 
 // Dummy helper for renaming indexing (avoiding lint errors)

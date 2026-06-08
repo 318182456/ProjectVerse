@@ -324,6 +324,25 @@ var SpaceManager = class {
     }
     return Array.from(tags);
   }
+  getSpaceFolders(spaceId) {
+    const space = this.getSpace(spaceId);
+    if (!space)
+      return [];
+    const allLoaded = this.app.vault.getAllLoadedFiles();
+    const matchedFolders = /* @__PURE__ */ new Set();
+    for (const folderPath of space.folders) {
+      const folder = this.app.vault.getAbstractFileByPath(folderPath);
+      if (folder instanceof import_obsidian.TFolder) {
+        matchedFolders.add(folder);
+      }
+      for (const file of allLoaded) {
+        if (file instanceof import_obsidian.TFolder && file.path.startsWith(folderPath === "/" ? "" : folderPath + "/")) {
+          matchedFolders.add(file);
+        }
+      }
+    }
+    return Array.from(matchedFolders);
+  }
 };
 function indexOffsetMinusOne(idx) {
   return 0;
@@ -411,6 +430,8 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     super(leaf);
     this.searchKeyword = "";
     this.expandedPaths = /* @__PURE__ */ new Set();
+    this.selectedPath = null;
+    this.selectedIsFolder = false;
     this.spaceManager = spaceManager;
   }
   getViewType() {
@@ -438,53 +459,290 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     const header = container.createDiv({ cls: "vps-explorer-header" });
     header.createDiv({ cls: "vps-explorer-title", text: "\u{1F5C2}\uFE0F \u9879\u76EE\u7A7A\u95F4" });
     const headerActions = header.createDiv({ cls: "vps-explorer-header-actions" });
-    const addBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
-    (0, import_obsidian3.setIcon)(addBtn, "plus");
-    addBtn.setAttribute("title", "\u65B0\u5EFA\u7A7A\u95F4");
-    addBtn.addEventListener("click", () => {
-      new SpaceModal(this.app, async (name, icon, color) => {
-        const space = await this.spaceManager.createSpace(name, icon, color);
-        this.app.workspace.trigger("vps-space-activated", space.id);
-        this.render();
-      }).open();
-    });
+    headerActions.addEventListener("click", (e) => e.stopPropagation());
     const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
     const activeSpace = activeSpaceId ? this.spaceManager.getSpace(activeSpaceId) : null;
+    const addBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
+    (0, import_obsidian3.setIcon)(addBtn, "plus");
+    addBtn.setAttribute("title", "\u65B0\u5EFA\u7A7A\u95F4/\u7B14\u8BB0/\u6587\u4EF6\u5939");
+    addBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (activeSpace) {
+        const menu = new import_obsidian3.Menu();
+        menu.addItem((item) => {
+          item.setTitle("\u65B0\u5EFA\u7B14\u8BB0").setIcon("file-plus").onClick(async () => {
+            const path = this.selectedPath;
+            const isFolder = this.selectedIsFolder;
+            let parentPath = "";
+            if (path) {
+              parentPath = path;
+              if (!isFolder) {
+                const lastSlash = path.lastIndexOf("/");
+                parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+              }
+            }
+            new InputModal(this.app, "\u65B0\u5EFA\u7B14\u8BB0", "\u7B14\u8BB0\u540D\u79F0", "\u8BF7\u8F93\u5165\u7B14\u8BB0\u540D\u79F0...", "", async (noteName) => {
+              if (noteName) {
+                const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${noteName}.md`);
+                if (await this.app.vault.adapter.exists(newPath)) {
+                  new import_obsidian3.Notice("\u8BE5\u7B14\u8BB0\u5DF2\u5B58\u5728\uFF01");
+                  return;
+                }
+                await this.app.vault.create(newPath, "");
+                const space = this.spaceManager.getSpace(activeSpace.id);
+                if (space) {
+                  const isSubfolder = space.folders.some((f) => newPath.startsWith(f === "/" ? "" : f + "/"));
+                  if (!isSubfolder) {
+                    await this.spaceManager.addFileToSpace(activeSpace.id, newPath);
+                  }
+                }
+                new import_obsidian3.Notice(`\u7B14\u8BB0\u521B\u5EFA\u6210\u529F: ${newPath}`);
+                this.render();
+              }
+            }).open();
+          });
+        });
+        menu.addItem((item) => {
+          item.setTitle("\u65B0\u5EFA\u6587\u4EF6\u5939").setIcon("folder-plus").onClick(async () => {
+            const path = this.selectedPath;
+            const isFolder = this.selectedIsFolder;
+            let parentPath = "";
+            if (path) {
+              parentPath = path;
+              if (!isFolder) {
+                const lastSlash = path.lastIndexOf("/");
+                parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+              }
+            }
+            new InputModal(this.app, "\u65B0\u5EFA\u6587\u4EF6\u5939", "\u6587\u4EF6\u5939\u540D\u79F0", "\u8BF7\u8F93\u5165\u6587\u4EF6\u5939\u540D\u79F0...", "", async (folderName) => {
+              if (folderName) {
+                const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${folderName}`);
+                if (await this.app.vault.adapter.exists(newPath)) {
+                  new import_obsidian3.Notice("\u8BE5\u6587\u4EF6\u5939\u5DF2\u5B58\u5728\uFF01");
+                  return;
+                }
+                await this.app.vault.createFolder(newPath);
+                await this.spaceManager.addFolderToSpace(activeSpace.id, newPath);
+                new import_obsidian3.Notice(`\u6587\u4EF6\u5939\u521B\u5EFA\u6210\u529F: ${newPath}`);
+                this.render();
+              }
+            }).open();
+          });
+        });
+        menu.addSeparator();
+        menu.addItem((item) => {
+          item.setTitle("\u65B0\u5EFA\u9879\u76EE\u7A7A\u95F4").setIcon("folder-git").onClick(() => {
+            new SpaceModal(this.app, async (name, icon, color) => {
+              const space = await this.spaceManager.createSpace(name, icon, color);
+              this.app.workspace.trigger("vps-space-activated", space.id);
+              this.render();
+            }).open();
+          });
+        });
+        menu.showAtMouseEvent(e);
+      } else {
+        new SpaceModal(this.app, async (name, icon, color) => {
+          const space = await this.spaceManager.createSpace(name, icon, color);
+          this.app.workspace.trigger("vps-space-activated", space.id);
+          this.render();
+        }).open();
+      }
+    });
     if (activeSpace) {
       const copyBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
       (0, import_obsidian3.setIcon)(copyBtn, "copy");
-      copyBtn.setAttribute("title", "\u590D\u5236\u7A7A\u95F4");
+      copyBtn.setAttribute("title", "\u590D\u5236\u7A7A\u95F4/\u6587\u4EF6\u5939/\u7B14\u8BB0");
       copyBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        const newSpace = await this.spaceManager.duplicateSpace(activeSpace.id);
-        if (newSpace) {
-          this.app.workspace.trigger("vps-space-activated", newSpace.id);
+        const path = this.selectedPath;
+        const isFolder = this.selectedIsFolder;
+        if (path) {
+          if (isFolder) {
+            new InputModal(this.app, "\u590D\u5236\u6587\u4EF6\u5939", "\u65B0\u6587\u4EF6\u5939\u540D\u79F0", "\u8BF7\u8F93\u5165\u65B0\u6587\u4EF6\u5939\u540D\u79F0...", "", async (folderName) => {
+              if (folderName) {
+                const lastSlash = path.lastIndexOf("/");
+                const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+                const newFolderPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${folderName}`);
+                if (await this.app.vault.adapter.exists(newFolderPath)) {
+                  new import_obsidian3.Notice("\u76EE\u6807\u6587\u4EF6\u5939\u5DF2\u5B58\u5728\uFF01");
+                  return;
+                }
+                await this.app.vault.createFolder(newFolderPath);
+                const files = this.app.vault.getFiles();
+                const sourcePrefix = path + "/";
+                for (const file of files) {
+                  if (file.path.startsWith(sourcePrefix)) {
+                    const relativePath = file.path.substring(sourcePrefix.length);
+                    const destPath = (0, import_obsidian3.normalizePath)(`${newFolderPath}/${relativePath}`);
+                    const destLastSlash = destPath.lastIndexOf("/");
+                    if (destLastSlash !== -1) {
+                      const destParent = destPath.substring(0, destLastSlash);
+                      if (!await this.app.vault.adapter.exists(destParent)) {
+                        await this.app.vault.createFolder(destParent);
+                      }
+                    }
+                    await this.app.vault.copy(file, destPath);
+                    const space = this.spaceManager.getSpace(activeSpace.id);
+                    if (space) {
+                      const isSubfolder = space.folders.some((f) => destPath.startsWith(f === "/" ? "" : f + "/"));
+                      if (!isSubfolder) {
+                        await this.spaceManager.addFileToSpace(activeSpace.id, destPath);
+                      }
+                    }
+                  }
+                }
+                new import_obsidian3.Notice("\u6587\u4EF6\u5939\u590D\u5236\u6210\u529F\uFF01");
+                this.render();
+              }
+            }).open();
+          } else {
+            const lastSlash = path.lastIndexOf("/");
+            const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+            const extMatch = path.match(/\.[^/.]+$/);
+            const ext = extMatch ? extMatch[0] : "";
+            const baseName = extMatch ? path.substring(lastSlash + 1, path.length - ext.length) : path.substring(lastSlash + 1);
+            new InputModal(this.app, "\u590D\u5236\u7B14\u8BB0", "\u65B0\u7B14\u8BB0\u540D\u79F0", "\u8BF7\u8F93\u5165\u65B0\u7B14\u8BB0\u540D\u79F0...", `${baseName}_copy`, async (newName) => {
+              if (newName) {
+                const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${newName}${ext}`);
+                const file = this.app.vault.getAbstractFileByPath(path);
+                if (file instanceof import_obsidian3.TFile) {
+                  await this.app.vault.copy(file, newPath);
+                  const space = this.spaceManager.getSpace(activeSpace.id);
+                  if (space) {
+                    const isSubfolder = space.folders.some((f) => newPath.startsWith(f === "/" ? "" : f + "/"));
+                    if (!isSubfolder) {
+                      await this.spaceManager.addFileToSpace(activeSpace.id, newPath);
+                    }
+                  }
+                  new import_obsidian3.Notice("\u6587\u4EF6\u590D\u5236\u6210\u529F\uFF01");
+                  this.render();
+                }
+              }
+            }).open();
+          }
+        } else {
+          const newSpace = await this.spaceManager.duplicateSpace(activeSpace.id);
+          if (newSpace) {
+            this.app.workspace.trigger("vps-space-activated", newSpace.id);
+          }
+          this.render();
         }
-        this.render();
       });
       const editBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
       (0, import_obsidian3.setIcon)(editBtn, "pencil");
-      editBtn.setAttribute("title", "\u7F16\u8F91\u7A7A\u95F4");
-      editBtn.addEventListener("click", (e) => {
+      editBtn.setAttribute("title", "\u7F16\u8F91\u7A7A\u95F4/\u91CD\u547D\u540D");
+      editBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        new SpaceModal(this.app, async (name, icon, color) => {
-          await this.spaceManager.updateSpace(activeSpace.id, { name, icon, color });
-          this.render();
-          this.app.workspace.trigger("vps-space-updated", activeSpace.id);
-        }, activeSpace).open();
+        const path = this.selectedPath;
+        const isFolder = this.selectedIsFolder;
+        if (path) {
+          if (isFolder) {
+            const lastSlash = path.lastIndexOf("/");
+            const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+            const currentName = lastSlash !== -1 ? path.substring(lastSlash + 1) : path;
+            new InputModal(this.app, "\u91CD\u547D\u540D\u6587\u4EF6\u5939", "\u65B0\u6587\u4EF6\u5939\u540D\u79F0", "\u8BF7\u8F93\u5165\u65B0\u6587\u4EF6\u5939\u540D\u79F0...", currentName, async (newName) => {
+              if (newName && newName !== currentName) {
+                const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${newName}`);
+                const folder = this.app.vault.getAbstractFileByPath(path);
+                if (folder instanceof import_obsidian3.TFolder) {
+                  await this.app.fileManager.renameFile(folder, newPath);
+                  this.selectedPath = newPath;
+                  new import_obsidian3.Notice("\u6587\u4EF6\u5939\u91CD\u547D\u540D\u6210\u529F\uFF01");
+                  this.render();
+                }
+              }
+            }).open();
+          } else {
+            const lastSlash = path.lastIndexOf("/");
+            const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+            const extMatch = path.match(/\.[^/.]+$/);
+            const ext = extMatch ? extMatch[0] : "";
+            const baseName = extMatch ? path.substring(lastSlash + 1, path.length - ext.length) : path.substring(lastSlash + 1);
+            new InputModal(this.app, "\u91CD\u547D\u540D\u7B14\u8BB0", "\u65B0\u7B14\u8BB0\u540D\u79F0", "\u8BF7\u8F93\u5165\u65B0\u7B14\u8BB0\u540D\u79F0...", baseName, async (newName) => {
+              if (newName && newName !== baseName) {
+                const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${newName}${ext}`);
+                const file = this.app.vault.getAbstractFileByPath(path);
+                if (file instanceof import_obsidian3.TFile) {
+                  await this.app.fileManager.renameFile(file, newPath);
+                  this.selectedPath = newPath;
+                  new import_obsidian3.Notice("\u6587\u4EF6\u91CD\u547D\u540D\u6210\u529F\uFF01");
+                  this.render();
+                }
+              }
+            }).open();
+          }
+        } else {
+          new SpaceModal(this.app, async (name, icon, color) => {
+            await this.spaceManager.updateSpace(activeSpace.id, { name, icon, color });
+            this.render();
+            this.app.workspace.trigger("vps-space-updated", activeSpace.id);
+          }, activeSpace).open();
+        }
       });
       const deleteBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
       (0, import_obsidian3.setIcon)(deleteBtn, "trash-2");
-      deleteBtn.setAttribute("title", "\u5220\u9664\u7A7A\u95F4");
+      deleteBtn.setAttribute("title", "\u5220\u9664\u7A7A\u95F4/\u79FB\u51FA/\u7269\u7406\u5220\u9664");
       deleteBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        if (confirm(`\u786E\u5B9A\u8981\u5220\u9664\u7A7A\u95F4 "${activeSpace.name}" \u5417\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u4F1A\u5220\u9664\u7269\u7406\u6587\u4EF6\u3002`)) {
-          await this.spaceManager.deleteSpace(activeSpace.id);
-          this.render();
-          this.app.workspace.trigger("vps-space-deleted", activeSpace.id);
+        if (this.selectedPath) {
+          if (this.selectedIsFolder) {
+            const confirmRemove = await CustomConfirmModal.show(this.app, "\u79FB\u51FA\u6587\u4EF6\u5939", `\u786E\u5B9A\u8981\u4ECE\u5F53\u524D\u7A7A\u95F4\u79FB\u51FA\u6587\u4EF6\u5939 "${this.selectedPath}" \u53CA\u5176\u5305\u542B\u7684\u6240\u6709\u6587\u4EF6\u5417\uFF1F
+\uFF08\u6B64\u64CD\u4F5C\u4E0D\u4F1A\u7269\u7406\u5220\u9664\u6587\u4EF6\u5939\u4E0E\u6587\u4EF6\uFF09`, [
+              { text: "\u786E\u5B9A\u79FB\u51FA", variant: "danger", value: true },
+              { text: "\u53D6\u6D88", variant: "secondary", value: false }
+            ], false);
+            if (confirmRemove) {
+              const space = this.spaceManager.getSpace(activeSpace.id);
+              if (space) {
+                space.files = space.files.filter((f) => !f.startsWith(this.selectedPath + "/"));
+                space.folders = space.folders.filter((f) => f !== this.selectedPath && !f.startsWith(this.selectedPath + "/"));
+                await this.spaceManager.updateSpace(activeSpace.id, {
+                  files: space.files,
+                  folders: space.folders
+                });
+                this.selectedPath = null;
+                this.render();
+              }
+            }
+          } else {
+            const choice = await CustomConfirmModal.show(this.app, "\u5220\u9664\u6216\u79FB\u51FA\u6587\u4EF6", `\u60A8\u60F3\u5982\u4F55\u5904\u7406\u6587\u4EF6 "${this.selectedPath}"\uFF1F`, [
+              { text: "\u5F7B\u5E95\u5220\u9664\u6587\u4EF6", variant: "danger", value: "delete" },
+              { text: "\u4EC5\u79FB\u51FA\u5F53\u524D\u7A7A\u95F4", variant: "cta", value: "remove" },
+              { text: "\u53D6\u6D88", variant: "secondary", value: "cancel" }
+            ], "cancel");
+            if (choice === "delete") {
+              const file = this.app.vault.getAbstractFileByPath(this.selectedPath);
+              if (file instanceof import_obsidian3.TFile) {
+                await this.app.vault.delete(file);
+                this.selectedPath = null;
+                this.render();
+              }
+            } else if (choice === "remove") {
+              await this.spaceManager.removeFileFromSpace(activeSpace.id, this.selectedPath);
+              this.selectedPath = null;
+              this.render();
+            }
+          }
+        } else {
+          const confirmDelete = await CustomConfirmModal.show(this.app, "\u5220\u9664\u7A7A\u95F4", `\u786E\u5B9A\u8981\u5220\u9664\u7A7A\u95F4 "${activeSpace.name}" \u5417\uFF1F
+\u6B64\u64CD\u4F5C\u4E0D\u4F1A\u5220\u9664\u7269\u7406\u6587\u4EF6\u3002`, [
+            { text: "\u786E\u5B9A\u5220\u9664", variant: "danger", value: true },
+            { text: "\u53D6\u6D88", variant: "secondary", value: false }
+          ], false);
+          if (confirmDelete) {
+            await this.spaceManager.deleteSpace(activeSpace.id);
+            this.render();
+            this.app.workspace.trigger("vps-space-deleted", activeSpace.id);
+          }
         }
       });
     }
+    container.addEventListener("click", () => {
+      if (this.selectedPath) {
+        this.selectedPath = null;
+        this.render();
+      }
+    });
     const spaces = this.spaceManager.getSpaces();
     const spacesListEl = container.createDiv({ cls: "vps-spaces-list" });
     spaces.forEach((space) => {
@@ -500,7 +758,9 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       (0, import_obsidian3.setIcon)(iconEl, space.icon.replace("lucide-", ""));
       const infoEl = spaceItem.createDiv({ cls: "vps-space-info" });
       infoEl.createDiv({ cls: "vps-space-name", text: space.name });
-      spaceItem.addEventListener("click", () => {
+      spaceItem.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.selectedPath = null;
         this.app.workspace.trigger("vps-space-activated", space.id);
       });
       spaceItem.setAttribute("draggable", "true");
@@ -541,14 +801,15 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       if (activeSpace2) {
         const treeContainer = container.createDiv({ cls: "vps-tree-container" });
         const files = this.spaceManager.getSpaceFiles(activeSpaceId);
-        if (files.length === 0) {
+        const folders = this.spaceManager.getSpaceFolders(activeSpaceId);
+        if (files.length === 0 && folders.length === 0) {
           const d = treeContainer.createDiv({
             text: '\u8BE5\u7A7A\u95F4\u6682\u65E0\u5173\u8054\u6587\u4EF6\u3002\u53F3\u952E\u6587\u4EF6\u5217\u8868\u9009\u62E9 "Add to Space" \u52A0\u5165\u3002',
             cls: "vps-space-meta"
           });
           d.style.cssText = "padding: 8px;";
         } else {
-          const rootNode = this.buildVirtualTree(files);
+          const rootNode = this.buildVirtualTree(files, folders);
           this.renderTreeNodes(treeContainer, rootNode, 0, activeSpaceId);
         }
         treeContainer.addEventListener("dragover", (e) => {
@@ -573,24 +834,31 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
               if (!dragPath)
                 return;
               const dragFile = this.app.vault.getAbstractFileByPath(dragPath);
-              if (dragFile && dragFile instanceof import_obsidian3.TFile) {
+              if (dragFile) {
                 const newDestPath = (0, import_obsidian3.normalizePath)(dragFile.name);
                 if (dragPath !== newDestPath) {
                   try {
                     await this.app.fileManager.renameFile(dragFile, newDestPath);
-                    new import_obsidian3.Notice(`\u7269\u7406\u79FB\u52A8\u6587\u4EF6\u81F3\u6839\u76EE\u5F55: ${newDestPath}`);
-                    if (sourceSpaceId && sourceSpaceId !== activeSpaceId) {
-                      await this.spaceManager.removeFileFromSpace(sourceSpaceId, dragPath);
-                    }
-                    const space = this.spaceManager.getSpace(activeSpaceId);
-                    if (space) {
-                      const isSubfolder = space.folders.some((f) => newDestPath.startsWith(f === "/" ? "" : f + "/"));
-                      if (!isSubfolder) {
-                        await this.spaceManager.addFileToSpace(activeSpaceId, newDestPath);
+                    new import_obsidian3.Notice(`\u7269\u7406\u79FB\u52A8\u81F3\u6839\u76EE\u5F55: ${newDestPath}`);
+                    if (dragFile instanceof import_obsidian3.TFile) {
+                      if (sourceSpaceId && sourceSpaceId !== activeSpaceId) {
+                        await this.spaceManager.removeFileFromSpace(sourceSpaceId, dragPath);
                       }
+                      const space = this.spaceManager.getSpace(activeSpaceId);
+                      if (space) {
+                        const isSubfolder = space.folders.some((f) => newDestPath.startsWith(f === "/" ? "" : f + "/"));
+                        if (!isSubfolder) {
+                          await this.spaceManager.addFileToSpace(activeSpaceId, newDestPath);
+                        }
+                      }
+                    } else if (dragFile instanceof import_obsidian3.TFolder) {
+                      if (sourceSpaceId) {
+                        await this.spaceManager.removeFolderFromSpace(sourceSpaceId, dragPath);
+                      }
+                      await this.spaceManager.addFolderToSpace(activeSpaceId, newDestPath);
                     }
                   } catch (err) {
-                    console.error("Failed to move file to root", err);
+                    console.error("Failed to move item to root", err);
                     new import_obsidian3.Notice("\u79FB\u81F3\u6839\u76EE\u5F55\u5931\u8D25\uFF01");
                   }
                 }
@@ -602,13 +870,32 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       }
     }
   }
-  buildVirtualTree(files) {
+  buildVirtualTree(files, folders) {
     const root = {
       name: "root",
       path: "",
       isFolder: true,
       children: /* @__PURE__ */ new Map()
     };
+    folders.forEach((folder) => {
+      if (folder.path === "" || folder.path === "/")
+        return;
+      const parts = folder.path.split("/");
+      let current = root;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const currentPath = parts.slice(0, i + 1).join("/");
+        if (!current.children.has(part)) {
+          current.children.set(part, {
+            name: part,
+            path: currentPath,
+            isFolder: true,
+            children: /* @__PURE__ */ new Map()
+          });
+        }
+        current = current.children.get(part);
+      }
+    });
     files.forEach((file) => {
       const parts = file.path.split("/");
       let current = root;
@@ -652,8 +939,9 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     sortedKeys.forEach((key) => {
       const childNode = node.children.get(key);
       const isExpanded = this.expandedPaths.has(childNode.path);
+      const isSelected = childNode.path === this.selectedPath;
       const nodeEl = parentEl.createDiv({
-        cls: `vps-tree-node vps-tree-node-depth-${depth}`
+        cls: `vps-tree-node vps-tree-node-depth-${depth} ${isSelected ? "is-selected" : ""}`
       });
       const iconEl = nodeEl.createDiv({ cls: "vps-tree-node-icon" });
       (0, import_obsidian3.setIcon)(iconEl, childNode.isFolder ? isExpanded ? "chevron-down" : "chevron-right" : "file-text");
@@ -662,6 +950,71 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
         e.preventDefault();
         const menu = new import_obsidian3.Menu();
         if (childNode.isFolder) {
+          menu.addItem((item) => {
+            item.setTitle("\u590D\u5236\u6587\u4EF6\u5939").setIcon("copy").onClick(() => {
+              new InputModal(this.app, "\u590D\u5236\u6587\u4EF6\u5939", "\u65B0\u6587\u4EF6\u5939\u540D\u79F0", "\u8BF7\u8F93\u5165\u65B0\u6587\u4EF6\u5939\u540D\u79F0...", "", async (folderName) => {
+                if (folderName) {
+                  const path = childNode.path;
+                  const lastSlash = path.lastIndexOf("/");
+                  const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+                  const newFolderPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${folderName}`);
+                  if (await this.app.vault.adapter.exists(newFolderPath)) {
+                    new import_obsidian3.Notice("\u76EE\u6807\u6587\u4EF6\u5939\u5DF2\u5B58\u5728\uFF01");
+                    return;
+                  }
+                  await this.app.vault.createFolder(newFolderPath);
+                  const files = this.app.vault.getFiles();
+                  const sourcePrefix = path + "/";
+                  for (const file of files) {
+                    if (file.path.startsWith(sourcePrefix)) {
+                      const relativePath = file.path.substring(sourcePrefix.length);
+                      const destPath = (0, import_obsidian3.normalizePath)(`${newFolderPath}/${relativePath}`);
+                      const destLastSlash = destPath.lastIndexOf("/");
+                      if (destLastSlash !== -1) {
+                        const destParent = destPath.substring(0, destLastSlash);
+                        if (!await this.app.vault.adapter.exists(destParent)) {
+                          await this.app.vault.createFolder(destParent);
+                        }
+                      }
+                      await this.app.vault.copy(file, destPath);
+                      const space = this.spaceManager.getSpace(spaceId);
+                      if (space) {
+                        const isSubfolder = space.folders.some((f) => destPath.startsWith(f === "/" ? "" : f + "/"));
+                        if (!isSubfolder) {
+                          await this.spaceManager.addFileToSpace(spaceId, destPath);
+                        }
+                      }
+                    }
+                  }
+                  new import_obsidian3.Notice("\u6587\u4EF6\u5939\u590D\u5236\u6210\u529F\uFF01");
+                  this.render();
+                }
+              }).open();
+            });
+          });
+          menu.addItem((item) => {
+            item.setTitle("\u91CD\u547D\u540D\u6587\u4EF6\u5939").setIcon("pencil").onClick(() => {
+              const path = childNode.path;
+              const lastSlash = path.lastIndexOf("/");
+              const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+              const currentName = lastSlash !== -1 ? path.substring(lastSlash + 1) : path;
+              new InputModal(this.app, "\u91CD\u547D\u540D\u6587\u4EF6\u5939", "\u65B0\u6587\u4EF6\u5939\u540D\u79F0", "\u8BF7\u8F93\u5165\u65B0\u6587\u4EF6\u5939\u540D\u79F0...", currentName, async (newName) => {
+                if (newName && newName !== currentName) {
+                  const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${newName}`);
+                  const folder = this.app.vault.getAbstractFileByPath(path);
+                  if (folder instanceof import_obsidian3.TFolder) {
+                    await this.app.fileManager.renameFile(folder, newPath);
+                    if (this.selectedPath === path) {
+                      this.selectedPath = newPath;
+                    }
+                    new import_obsidian3.Notice("\u6587\u4EF6\u5939\u91CD\u547D\u540D\u6210\u529F\uFF01");
+                    this.render();
+                  }
+                }
+              }).open();
+            });
+          });
+          menu.addSeparator();
           menu.addItem((item) => {
             item.setTitle("\u79FB\u51FA\u6587\u4EF6\u5939\u4E0B\u7684\u6240\u6709\u6587\u4EF6").setIcon("folder-minus").onClick(async () => {
               const space = this.spaceManager.getSpace(spaceId);
@@ -672,22 +1025,118 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
                   files: space.files,
                   folders: space.folders
                 });
+                if (this.selectedPath === childNode.path) {
+                  this.selectedPath = null;
+                }
                 this.render();
+              }
+            });
+          });
+          menu.addItem((item) => {
+            item.setTitle("\u5F7B\u5E95\u5220\u9664\u8BE5\u6587\u4EF6\u5939").setIcon("trash-2").onClick(async () => {
+              const confirmDelete = await CustomConfirmModal.show(this.app, "\u5F7B\u5E95\u5220\u9664\u6587\u4EF6\u5939", `\u786E\u5B9A\u8981\u5C06\u6587\u4EF6\u5939 "${childNode.name}" \u53CA\u5176\u5305\u542B\u7684\u6240\u6709\u7269\u7406\u6587\u4EF6\u4ECE\u60A8\u7684\u5E93\u4E2D\u5F7B\u5E95\u5220\u9664\u5417\uFF1F
+\u6B64\u64CD\u4F5C\u65E0\u6CD5\u64A4\u9500\u3002`, [
+                { text: "\u786E\u5B9A\u5220\u9664", variant: "danger", value: true },
+                { text: "\u53D6\u6D88", variant: "secondary", value: false }
+              ], false);
+              if (confirmDelete) {
+                const folder = this.app.vault.getAbstractFileByPath(childNode.path);
+                if (folder instanceof import_obsidian3.TFolder) {
+                  const space = this.spaceManager.getSpace(spaceId);
+                  if (space) {
+                    space.files = space.files.filter((f) => !f.startsWith(childNode.path + "/"));
+                    space.folders = space.folders.filter((f) => f !== childNode.path && !f.startsWith(childNode.path + "/"));
+                    await this.spaceManager.updateSpace(spaceId, {
+                      files: space.files,
+                      folders: space.folders
+                    });
+                  }
+                  await this.app.vault.delete(folder, true);
+                  if (this.selectedPath === childNode.path) {
+                    this.selectedPath = null;
+                  }
+                  this.render();
+                  new import_obsidian3.Notice("\u6587\u4EF6\u5939\u5DF2\u6210\u529F\u5F7B\u5E95\u7269\u7406\u5220\u9664\uFF01");
+                }
               }
             });
           });
         } else {
           menu.addItem((item) => {
+            item.setTitle("\u590D\u5236\u7B14\u8BB0").setIcon("copy").onClick(() => {
+              const path = childNode.path;
+              const lastSlash = path.lastIndexOf("/");
+              const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+              const extMatch = path.match(/\.[^/.]+$/);
+              const ext = extMatch ? extMatch[0] : "";
+              const baseName = extMatch ? path.substring(lastSlash + 1, path.length - ext.length) : path.substring(lastSlash + 1);
+              new InputModal(this.app, "\u590D\u5236\u7B14\u8BB0", "\u65B0\u7B14\u8BB0\u540D\u79F0", "\u8BF7\u8F93\u5165\u65B0\u7B14\u8BB0\u540D\u79F0...", `${baseName}_copy`, async (newName) => {
+                if (newName) {
+                  const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${newName}${ext}`);
+                  const file = this.app.vault.getAbstractFileByPath(path);
+                  if (file instanceof import_obsidian3.TFile) {
+                    await this.app.vault.copy(file, newPath);
+                    const space = this.spaceManager.getSpace(spaceId);
+                    if (space) {
+                      const isSubfolder = space.folders.some((f) => newPath.startsWith(f === "/" ? "" : f + "/"));
+                      if (!isSubfolder) {
+                        await this.spaceManager.addFileToSpace(spaceId, newPath);
+                      }
+                    }
+                    new import_obsidian3.Notice("\u6587\u4EF6\u590D\u5236\u6210\u529F\uFF01");
+                    this.render();
+                  }
+                }
+              }).open();
+            });
+          });
+          menu.addItem((item) => {
+            item.setTitle("\u91CD\u547D\u540D\u7B14\u8BB0").setIcon("pencil").onClick(() => {
+              const path = childNode.path;
+              const lastSlash = path.lastIndexOf("/");
+              const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : "";
+              const extMatch = path.match(/\.[^/.]+$/);
+              const ext = extMatch ? extMatch[0] : "";
+              const baseName = extMatch ? path.substring(lastSlash + 1, path.length - ext.length) : path.substring(lastSlash + 1);
+              new InputModal(this.app, "\u91CD\u547D\u540D\u7B14\u8BB0", "\u65B0\u7B14\u8BB0\u540D\u79F0", "\u8BF7\u8F93\u5165\u65B0\u7B14\u8BB0\u540D\u79F0...", baseName, async (newName) => {
+                if (newName && newName !== baseName) {
+                  const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${newName}${ext}`);
+                  const file = this.app.vault.getAbstractFileByPath(path);
+                  if (file instanceof import_obsidian3.TFile) {
+                    await this.app.fileManager.renameFile(file, newPath);
+                    if (this.selectedPath === path) {
+                      this.selectedPath = newPath;
+                    }
+                    new import_obsidian3.Notice("\u6587\u4EF6\u91CD\u547D\u540D\u6210\u529F\uFF01");
+                    this.render();
+                  }
+                }
+              }).open();
+            });
+          });
+          menu.addSeparator();
+          menu.addItem((item) => {
             item.setTitle("\u4ECE\u7A7A\u95F4\u79FB\u51FA\u6587\u4EF6").setIcon("file-minus").onClick(async () => {
               await this.spaceManager.removeFileFromSpace(spaceId, childNode.path);
+              if (this.selectedPath === childNode.path) {
+                this.selectedPath = null;
+              }
               this.render();
             });
           });
           menu.addItem((item) => {
             item.setTitle("\u5F7B\u5E95\u5220\u9664\u8BE5\u7B14\u8BB0").setIcon("trash-2").onClick(async () => {
-              if (confirm(`\u786E\u5B9A\u8981\u5C06\u6587\u4EF6 "${childNode.name}" \u4ECE\u60A8\u7684\u5E93\u4E2D\u7269\u7406\u5220\u9664\u5417\uFF1F\u6B64\u64CD\u4F5C\u65E0\u6CD5\u64A4\u9500\u3002`)) {
+              const confirmDelete = await CustomConfirmModal.show(this.app, "\u5F7B\u5E95\u5220\u9664\u7B14\u8BB0", `\u786E\u5B9A\u8981\u5C06\u6587\u4EF6 "${childNode.name}" \u4ECE\u60A8\u7684\u5E93\u4E2D\u7269\u7406\u5220\u9664\u5417\uFF1F
+\u6B64\u64CD\u4F5C\u65E0\u6CD5\u64A4\u9500\u3002`, [
+                { text: "\u786E\u5B9A\u5220\u9664", variant: "danger", value: true },
+                { text: "\u53D6\u6D88", variant: "secondary", value: false }
+              ], false);
+              if (confirmDelete) {
                 if (childNode.file) {
                   await this.app.vault.delete(childNode.file);
+                  if (this.selectedPath === childNode.path) {
+                    this.selectedPath = null;
+                  }
                   this.render();
                 }
               }
@@ -727,16 +1176,16 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
           const dragFile = this.app.vault.getAbstractFileByPath(dragPath);
           if (!dragFile)
             return;
-          if (dragFile instanceof import_obsidian3.TFile) {
-            let targetFolder = "";
-            if (childNode.isFolder) {
-              targetFolder = childNode.path;
-            } else {
-              const lastSlash = childNode.path.lastIndexOf("/");
-              if (lastSlash !== -1) {
-                targetFolder = childNode.path.substring(0, lastSlash);
-              }
+          let targetFolder = "";
+          if (childNode.isFolder) {
+            targetFolder = childNode.path;
+          } else {
+            const lastSlash = childNode.path.lastIndexOf("/");
+            if (lastSlash !== -1) {
+              targetFolder = childNode.path.substring(0, lastSlash);
             }
+          }
+          if (dragFile instanceof import_obsidian3.TFile) {
             const newDestPath = (0, import_obsidian3.normalizePath)(`${targetFolder}/${dragFile.name}`);
             if (dragPath !== newDestPath) {
               try {
@@ -759,6 +1208,23 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
             }
             this.render();
             return;
+          } else if (dragFile instanceof import_obsidian3.TFolder) {
+            const newDestPath = (0, import_obsidian3.normalizePath)(`${targetFolder}/${dragFile.name}`);
+            if (dragPath !== newDestPath) {
+              try {
+                await this.app.fileManager.renameFile(dragFile, newDestPath);
+                new import_obsidian3.Notice(`\u7269\u7406\u79FB\u52A8\u6587\u4EF6\u5939\u81F3: ${newDestPath}`);
+                if (sourceSpaceId) {
+                  await this.spaceManager.removeFolderFromSpace(sourceSpaceId, dragPath);
+                }
+                await this.spaceManager.addFolderToSpace(spaceId, newDestPath);
+              } catch (err) {
+                console.error("Failed to move folder", err);
+                new import_obsidian3.Notice("\u6587\u4EF6\u5939\u79FB\u52A8\u5931\u8D25\uFF01");
+              }
+            }
+            this.render();
+            return;
           }
           if (sourceSpaceId && sourceSpaceId !== spaceId) {
             if (dragFile instanceof import_obsidian3.TFile) {
@@ -775,6 +1241,12 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       if (childNode.isFolder) {
         nodeEl.addEventListener("click", (e) => {
           e.stopPropagation();
+          if (this.selectedPath === childNode.path) {
+            this.selectedPath = null;
+          } else {
+            this.selectedPath = childNode.path;
+            this.selectedIsFolder = true;
+          }
           if (this.expandedPaths.has(childNode.path)) {
             this.expandedPaths.delete(childNode.path);
           } else {
@@ -789,11 +1261,99 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       } else {
         nodeEl.addEventListener("click", (e) => {
           e.stopPropagation();
+          this.selectedPath = childNode.path;
+          this.selectedIsFolder = false;
+          this.render();
           if (childNode.file) {
             this.app.workspace.getLeaf(e.ctrlKey || e.metaKey).openFile(childNode.file);
           }
         });
       }
+    });
+  }
+};
+var InputModal = class extends import_obsidian3.Modal {
+  constructor(app, titleText, labelText, placeholderText, defaultValue, onSubmit) {
+    super(app);
+    this.titleText = titleText;
+    this.labelText = labelText;
+    this.placeholderText = placeholderText;
+    this.value = defaultValue;
+    this.onSubmit = onSubmit;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: this.titleText });
+    new import_obsidian3.Setting(contentEl).setName(this.labelText).addText((text) => text.setPlaceholder(this.placeholderText).setValue(this.value).onChange((val) => this.value = val));
+    new import_obsidian3.Setting(contentEl).addButton((btn) => btn.setButtonText("\u786E\u5B9A").setCta().onClick(() => {
+      this.onSubmit(this.value);
+      this.close();
+    })).addButton((btn) => btn.setButtonText("\u53D6\u6D88").onClick(() => this.close()));
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var CustomConfirmModal = class _CustomConfirmModal extends import_obsidian3.Modal {
+  constructor(app, titleText, message, buttons, defaultValue, onChoose) {
+    super(app);
+    this.isChosen = false;
+    this.handleKeyDown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        const confirmBtn = this.buttons.find((b) => b.variant === "danger" || b.variant === "cta") || this.buttons[0];
+        if (confirmBtn) {
+          this.isChosen = true;
+          this.onChoose(confirmBtn.value);
+          this.close();
+        }
+      }
+    };
+    this.titleText = titleText;
+    this.message = message;
+    this.buttons = buttons;
+    this.defaultValue = defaultValue;
+    this.onChoose = onChoose;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("vps-confirm-modal");
+    contentEl.createEl("h2", { text: this.titleText, cls: "vps-confirm-title" });
+    const messageEl = contentEl.createDiv({ cls: "vps-confirm-message" });
+    const lines = this.message.split("\n");
+    lines.forEach((line, index) => {
+      if (index > 0)
+        messageEl.createEl("br");
+      messageEl.createSpan({ text: line });
+    });
+    const buttonContainer = contentEl.createDiv({ cls: "vps-confirm-buttons" });
+    this.buttons.forEach((opt) => {
+      const btn = buttonContainer.createEl("button", {
+        text: opt.text,
+        cls: `vps-confirm-btn vps-confirm-btn-${opt.variant || "secondary"}`
+      });
+      btn.addEventListener("click", () => {
+        this.isChosen = true;
+        this.onChoose(opt.value);
+        this.close();
+      });
+    });
+    window.addEventListener("keydown", this.handleKeyDown);
+  }
+  onClose() {
+    window.removeEventListener("keydown", this.handleKeyDown);
+    this.contentEl.empty();
+    if (!this.isChosen) {
+      this.onChoose(this.defaultValue);
+    }
+  }
+  static show(app, title, message, buttons, defaultValue) {
+    return new Promise((resolve) => {
+      const modal = new _CustomConfirmModal(app, title, message, buttons, defaultValue, (val) => resolve(val));
+      modal.open();
     });
   }
 };
@@ -1450,14 +2010,16 @@ ${names}`);
   }
   async activateSpace(spaceId) {
     const oldSpaceId = this.settings.activeSpaceId;
-    if (this.settings.enableWorkspaceSync && oldSpaceId) {
+    if (oldSpaceId) {
       const oldSpace = this.spaceManager.getSpace(oldSpaceId);
       if (oldSpace) {
         const openTabs = [];
-        this.app.workspace.iterateAllLeaves((leaf) => {
-          const file = leaf.view.file;
-          if (file instanceof import_obsidian7.TFile) {
-            openTabs.push(file.path);
+        this.app.workspace.iterateRootLeaves((leaf) => {
+          if (leaf.view.getViewType() === "markdown") {
+            const file = leaf.view.file;
+            if (file instanceof import_obsidian7.TFile) {
+              openTabs.push(file.path);
+            }
           }
         });
         const activeFile = this.app.workspace.getActiveFile();
@@ -1469,43 +2031,33 @@ ${names}`);
         });
       }
     }
+    this.app.workspace.iterateRootLeaves((leaf) => {
+      if (leaf.view.getViewType() === "markdown") {
+        leaf.detach();
+      }
+    });
     this.settings.activeSpaceId = spaceId;
     await this.savePluginSettings();
     this.updateViews();
-    const otherSpaces = this.settings.spaces.filter((s) => s.id !== spaceId);
-    const otherSpacesFiles = /* @__PURE__ */ new Set();
-    for (const os of otherSpaces) {
-      const files = this.spaceManager.getSpaceFiles(os.id);
-      for (const f of files) {
-        otherSpacesFiles.add(f.path);
-      }
-    }
-    const newSpaceFiles = this.spaceManager.getSpaceFiles(spaceId);
-    const newSpaceFilePaths = new Set(newSpaceFiles.map((f) => f.path));
-    this.app.workspace.iterateRootLeaves((leaf) => {
-      if (leaf.view.getViewType() === "markdown") {
-        const file = leaf.view.file;
+    const newSpace = this.spaceManager.getSpace(spaceId);
+    if (newSpace && newSpace.workspace && newSpace.workspace.openTabs) {
+      const workspace = newSpace.workspace;
+      for (const filePath of workspace.openTabs) {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof import_obsidian7.TFile) {
-          if (otherSpacesFiles.has(file.path) && !newSpaceFilePaths.has(file.path)) {
-            leaf.detach();
-          }
+          await this.app.workspace.getLeaf("tab").openFile(file);
         }
       }
-    });
-    if (this.settings.enableWorkspaceSync) {
-      const newSpace = this.spaceManager.getSpace(spaceId);
-      if (newSpace && newSpace.workspace && newSpace.workspace.openTabs.length > 0) {
+      const activeTab = workspace.activeTab;
+      if (activeTab) {
         this.app.workspace.iterateRootLeaves((leaf) => {
           if (leaf.view.getViewType() === "markdown") {
-            leaf.detach();
+            const file = leaf.view.file;
+            if (file instanceof import_obsidian7.TFile && file.path === activeTab) {
+              this.app.workspace.setActiveLeaf(leaf, { focus: true });
+            }
           }
         });
-        for (const filePath of newSpace.workspace.openTabs) {
-          const file = this.app.vault.getAbstractFileByPath(filePath);
-          if (file instanceof import_obsidian7.TFile) {
-            await this.app.workspace.getLeaf("tab").openFile(file);
-          }
-        }
       }
     }
     if (this.settings.enableDashboard) {

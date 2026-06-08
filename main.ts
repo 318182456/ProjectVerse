@@ -247,15 +247,17 @@ export default class VirtualProjectSpacePlugin extends Plugin {
   async activateSpace(spaceId: string) {
     const oldSpaceId = this.settings.activeSpaceId;
     
-    // Save current workspace layout state if setting enabled
-    if (this.settings.enableWorkspaceSync && oldSpaceId) {
+    // 1. Save current workspace layout state (all open markdown tabs) for the old space
+    if (oldSpaceId) {
       const oldSpace = this.spaceManager.getSpace(oldSpaceId);
       if (oldSpace) {
         const openTabs: string[] = [];
-        this.app.workspace.iterateAllLeaves((leaf) => {
-          const file = (leaf.view as any).file;
-          if (file instanceof TFile) {
-            openTabs.push(file.path);
+        this.app.workspace.iterateRootLeaves((leaf) => {
+          if (leaf.view.getViewType() === 'markdown') {
+            const file = (leaf.view as any).file;
+            if (file instanceof TFile) {
+              openTabs.push(file.path);
+            }
           }
         });
         
@@ -269,52 +271,40 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       }
     }
 
+    // 2. Close all currently open markdown tabs
+    this.app.workspace.iterateRootLeaves((leaf) => {
+      if (leaf.view.getViewType() === 'markdown') {
+        leaf.detach();
+      }
+    });
+
+    // 3. Switch active space and refresh UI views
     this.settings.activeSpaceId = spaceId;
     await this.savePluginSettings();
     this.updateViews();
 
-    // Close open markdown tabs belonging to other spaces, but not the new space
-    const otherSpaces = this.settings.spaces.filter(s => s.id !== spaceId);
-    const otherSpacesFiles = new Set<string>();
-    for (const os of otherSpaces) {
-      const files = this.spaceManager.getSpaceFiles(os.id);
-      for (const f of files) {
-        otherSpacesFiles.add(f.path);
-      }
-    }
-
-    const newSpaceFiles = this.spaceManager.getSpaceFiles(spaceId);
-    const newSpaceFilePaths = new Set(newSpaceFiles.map(f => f.path));
-
-    this.app.workspace.iterateRootLeaves((leaf) => {
-      if (leaf.view.getViewType() === 'markdown') {
-        const file = (leaf.view as any).file;
+    // 4. Restore workspace layout state for the newly active space
+    const newSpace = this.spaceManager.getSpace(spaceId);
+    if (newSpace && newSpace.workspace && newSpace.workspace.openTabs) {
+      const workspace = newSpace.workspace;
+      for (const filePath of workspace.openTabs) {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof TFile) {
-          if (otherSpacesFiles.has(file.path) && !newSpaceFilePaths.has(file.path)) {
-            leaf.detach();
-          }
+          await this.app.workspace.getLeaf('tab').openFile(file);
         }
       }
-    });
-
-    // Restore workspace layout state for the new space
-    if (this.settings.enableWorkspaceSync) {
-      const newSpace = this.spaceManager.getSpace(spaceId);
-      if (newSpace && newSpace.workspace && newSpace.workspace.openTabs.length > 0) {
-        // Close all current markdown leaves
+      
+      // Restore active focused tab if it exists
+      const activeTab = workspace.activeTab;
+      if (activeTab) {
         this.app.workspace.iterateRootLeaves((leaf) => {
           if (leaf.view.getViewType() === 'markdown') {
-            leaf.detach();
+            const file = (leaf.view as any).file;
+            if (file instanceof TFile && file.path === activeTab) {
+              this.app.workspace.setActiveLeaf(leaf, { focus: true });
+            }
           }
         });
-
-        // Open stored files
-        for (const filePath of newSpace.workspace.openTabs) {
-          const file = this.app.vault.getAbstractFileByPath(filePath);
-          if (file instanceof TFile) {
-            await this.app.workspace.getLeaf('tab').openFile(file);
-          }
-        }
       }
     }
 

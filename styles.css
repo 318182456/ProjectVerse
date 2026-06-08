@@ -213,6 +213,15 @@
   background-color: var(--background-modifier-hover);
 }
 
+.vps-tree-node.is-selected {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent, #fff);
+}
+
+.vps-tree-node.is-selected .vps-tree-node-icon {
+  color: var(--text-on-accent, #fff);
+}
+
 .vps-tree-node-icon {
   margin-right: 8px;
   display: flex;
@@ -470,3 +479,74 @@
   background-color: var(--badge-color);
   margin-right: 6px;
 }
+
+/* Custom Confirm Modal Styling */
+.vps-confirm-modal {
+  padding: 8px;
+}
+
+.vps-confirm-title {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+.vps-confirm-message {
+  font-size: 1em;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.vps-confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.vps-confirm-btn {
+  padding: 8px 18px;
+  border-radius: var(--vps-border-radius, 8px);
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: var(--vps-transition);
+}
+
+.vps-confirm-btn-secondary {
+  background-color: var(--background-secondary-alt, #e0e0e0);
+  color: var(--text-normal);
+  border: 1px solid var(--vps-card-border);
+}
+
+.theme-dark .vps-confirm-btn-secondary {
+  background-color: var(--background-secondary-alt, #2e2e2e);
+}
+
+.vps-confirm-btn-secondary:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.vps-confirm-btn-cta {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent, white);
+}
+
+.vps-confirm-btn-cta:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.vps-confirm-btn-danger {
+  background-color: var(--background-modifier-error, #d32f2f);
+  color: white;
+}
+
+.vps-confirm-btn-danger:hover {
+  background-color: var(--background-modifier-error-hover, #c62828);
+  transform: translateY(-1px);
+}
+
