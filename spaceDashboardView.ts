@@ -25,6 +25,7 @@ export class SpaceDashboardView extends ItemView {
   private spaceId?: string;
   private tasks: SpaceTask[] = [];
   private expandedPaths: Set<string> = new Set<string>();
+  private currentRenderVersion = 0;
 
   constructor(leaf: WorkspaceLeaf, spaceManager: SpaceManager) {
     super(leaf);
@@ -63,10 +64,11 @@ export class SpaceDashboardView extends ItemView {
     const targetId = activeSpaceId || this.spaceId;
     this.spaceId = targetId;
 
+    const renderVersion = ++this.currentRenderVersion;
     const container = this.contentEl;
-    container.empty();
 
     if (!targetId) {
+      container.empty();
       const d = container.createDiv({
         text: '请在侧边栏选择并激活一个项目空间以加载 Dashboard。',
         cls: 'vps-space-meta'
@@ -77,6 +79,7 @@ export class SpaceDashboardView extends ItemView {
 
     const space = this.spaceManager.getSpace(targetId);
     if (!space) {
+      container.empty();
       const d = container.createDiv({
         text: '未找到选定的项目空间。',
         cls: 'vps-space-meta'
@@ -87,6 +90,12 @@ export class SpaceDashboardView extends ItemView {
 
     // Load tasks from space files
     await this.scanTasks(space);
+
+    if (renderVersion !== this.currentRenderVersion) {
+      return;
+    }
+
+    container.empty();
 
     const dashboardEl = container.createDiv({ cls: 'vps-dashboard-container' });
 

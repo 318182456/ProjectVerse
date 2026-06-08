@@ -625,6 +625,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     super(leaf);
     this.tasks = [];
     this.expandedPaths = /* @__PURE__ */ new Set();
+    this.currentRenderVersion = 0;
     this.spaceManager = spaceManager;
   }
   getViewType() {
@@ -654,9 +655,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const activeSpaceId = this.app.plugins?.plugins?.["virtual-project-space"]?.settings?.activeSpaceId;
     const targetId = activeSpaceId || this.spaceId;
     this.spaceId = targetId;
+    const renderVersion = ++this.currentRenderVersion;
     const container = this.contentEl;
-    container.empty();
     if (!targetId) {
+      container.empty();
       const d = container.createDiv({
         text: "\u8BF7\u5728\u4FA7\u8FB9\u680F\u9009\u62E9\u5E76\u6FC0\u6D3B\u4E00\u4E2A\u9879\u76EE\u7A7A\u95F4\u4EE5\u52A0\u8F7D Dashboard\u3002",
         cls: "vps-space-meta"
@@ -666,6 +668,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     }
     const space = this.spaceManager.getSpace(targetId);
     if (!space) {
+      container.empty();
       const d = container.createDiv({
         text: "\u672A\u627E\u5230\u9009\u5B9A\u7684\u9879\u76EE\u7A7A\u95F4\u3002",
         cls: "vps-space-meta"
@@ -674,6 +677,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       return;
     }
     await this.scanTasks(space);
+    if (renderVersion !== this.currentRenderVersion) {
+      return;
+    }
+    container.empty();
     const dashboardEl = container.createDiv({ cls: "vps-dashboard-container" });
     const banner = dashboardEl.createDiv({ cls: "vps-dashboard-banner" });
     banner.style.setProperty("--banner-color-start", space.color);
