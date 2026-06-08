@@ -1,1 +1,5 @@
-.vscode/settings.json
+node_modules/
+main.js
+.obsidian/
+.DS_Store
+*.log
