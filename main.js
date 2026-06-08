@@ -1256,17 +1256,23 @@ ${names}`);
     }
   }
   async activateExplorerView() {
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_EXPLORER);
-    const leftLeaf = this.app.workspace.getLeftLeaf(false);
-    if (leftLeaf) {
-      await leftLeaf.setViewState({
-        type: VIEW_TYPE_SPACE_EXPLORER,
-        active: true
-      });
+    const { workspace } = this.app;
+    let leaf = null;
+    const leaves = workspace.getLeavesOfType(VIEW_TYPE_SPACE_EXPLORER);
+    if (leaves.length > 0) {
+      leaf = leaves[0];
+    } else {
+      const leftLeaf = workspace.getLeftLeaf(false);
+      if (leftLeaf) {
+        leaf = leftLeaf;
+        await leaf.setViewState({
+          type: VIEW_TYPE_SPACE_EXPLORER,
+          active: true
+        });
+      }
     }
-    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SPACE_EXPLORER)[0];
     if (leaf) {
-      this.app.workspace.revealLeaf(leaf);
+      workspace.revealLeaf(leaf);
     }
   }
   async openDashboard(spaceId) {
