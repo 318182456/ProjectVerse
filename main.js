@@ -626,6 +626,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     this.tasks = [];
     this.expandedPaths = /* @__PURE__ */ new Set();
     this.currentRenderVersion = 0;
+    this.hideCompleted = false;
     this.spaceManager = spaceManager;
   }
   getViewType() {
@@ -656,6 +657,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const targetId = activeSpaceId || this.spaceId;
     this.spaceId = targetId;
     this.leaf.updateHeader();
+    const viewAny = this;
+    if (viewAny.titleEl) {
+      viewAny.titleEl.setText(this.getDisplayText());
+    }
     const renderVersion = ++this.currentRenderVersion;
     const container = this.contentEl;
     if (!targetId) {
@@ -728,13 +733,29 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       this.renderTreeNodes(filesList, rootNode, 0);
     }
     const tasksCard = grid.createDiv({ cls: "vps-dashboard-card" });
-    tasksCard.createDiv({ cls: "vps-dashboard-card-title", text: "\u2611\uFE0F \u5F85\u529E\u4E8B\u9879" });
+    const tasksTitle = tasksCard.createDiv({ cls: "vps-dashboard-card-title", text: "\u2611\uFE0F \u5F85\u529E\u4E8B\u9879" });
+    const tasksActions = tasksTitle.createDiv({ cls: "vps-quick-actions" });
+    const hideCompletedLabel = tasksActions.createEl("label", { cls: "vps-hide-completed-label" });
+    hideCompletedLabel.style.cssText = "display: flex; align-items: center; gap: 4px; font-size: 0.8em; font-weight: normal; cursor: pointer; user-select: none; color: var(--text-muted);";
+    const hideCompletedCheckbox = hideCompletedLabel.createEl("input", {
+      type: "checkbox"
+    });
+    hideCompletedCheckbox.checked = this.hideCompleted;
+    hideCompletedLabel.createSpan({ text: "\u9690\u85CF\u5DF2\u5B8C\u6210" });
+    hideCompletedCheckbox.addEventListener("change", () => {
+      this.hideCompleted = hideCompletedCheckbox.checked;
+      this.render();
+    });
     const tasksList = tasksCard.createDiv();
     tasksList.style.cssText = "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;";
-    if (this.tasks.length === 0) {
-      tasksList.createDiv({ text: "\u672A\u5728\u5173\u8054\u6587\u4EF6\u4E2D\u627E\u5230\u5F85\u529E\u4EFB\u52A1", cls: "vps-space-meta" });
+    const displayedTasks = this.hideCompleted ? this.tasks.filter((t) => !t.completed) : this.tasks;
+    if (displayedTasks.length === 0) {
+      tasksList.createDiv({
+        text: this.hideCompleted ? "\u6682\u65E0\u672A\u5B8C\u6210\u7684\u4EFB\u52A1" : "\u672A\u5728\u5173\u8054\u6587\u4EF6\u4E2D\u627E\u5230\u5F85\u529E\u4EFB\u52A1",
+        cls: "vps-space-meta"
+      });
     } else {
-      this.tasks.forEach((task, idx) => {
+      displayedTasks.forEach((task, idx) => {
         const taskRow = tasksList.createDiv({
           cls: `vps-task-item ${task.completed ? "is-completed" : ""}`
         });

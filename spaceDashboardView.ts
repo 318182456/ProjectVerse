@@ -26,6 +26,7 @@ export class SpaceDashboardView extends ItemView {
   private tasks: SpaceTask[] = [];
   private expandedPaths: Set<string> = new Set<string>();
   private currentRenderVersion = 0;
+  private hideCompleted = false;
 
   constructor(leaf: WorkspaceLeaf, spaceManager: SpaceManager) {
     super(leaf);
@@ -65,6 +66,10 @@ export class SpaceDashboardView extends ItemView {
     this.spaceId = targetId;
 
     (this.leaf as any).updateHeader();
+    const viewAny = this as any;
+    if (viewAny.titleEl) {
+      viewAny.titleEl.setText(this.getDisplayText());
+    }
 
     const renderVersion = ++this.currentRenderVersion;
     const container = this.contentEl;
@@ -165,14 +170,35 @@ export class SpaceDashboardView extends ItemView {
 
     // Card B: Tasks List
     const tasksCard = grid.createDiv({ cls: 'vps-dashboard-card' });
-    tasksCard.createDiv({ cls: 'vps-dashboard-card-title', text: '☑️ 待办事项' });
+    const tasksTitle = tasksCard.createDiv({ cls: 'vps-dashboard-card-title', text: '☑️ 待办事项' });
+    
+    const tasksActions = tasksTitle.createDiv({ cls: 'vps-quick-actions' });
+    const hideCompletedLabel = tasksActions.createEl('label', { cls: 'vps-hide-completed-label' });
+    hideCompletedLabel.style.cssText = 'display: flex; align-items: center; gap: 4px; font-size: 0.8em; font-weight: normal; cursor: pointer; user-select: none; color: var(--text-muted);';
+    
+    const hideCompletedCheckbox = hideCompletedLabel.createEl('input', {
+      type: 'checkbox'
+    });
+    hideCompletedCheckbox.checked = this.hideCompleted;
+    hideCompletedLabel.createSpan({ text: '隐藏已完成' });
+    
+    hideCompletedCheckbox.addEventListener('change', () => {
+      this.hideCompleted = hideCompletedCheckbox.checked;
+      this.render();
+    });
     
     const tasksList = tasksCard.createDiv();
     tasksList.style.cssText = 'max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;';
-    if (this.tasks.length === 0) {
-      tasksList.createDiv({ text: '未在关联文件中找到待办任务', cls: 'vps-space-meta' });
+    
+    const displayedTasks = this.hideCompleted ? this.tasks.filter(t => !t.completed) : this.tasks;
+    
+    if (displayedTasks.length === 0) {
+      tasksList.createDiv({ 
+        text: this.hideCompleted ? '暂无未完成的任务' : '未在关联文件中找到待办任务', 
+        cls: 'vps-space-meta' 
+      });
     } else {
-      this.tasks.forEach((task, idx) => {
+      displayedTasks.forEach((task, idx) => {
         const taskRow = tasksList.createDiv({ 
           cls: `vps-task-item ${task.completed ? 'is-completed' : ''}` 
         });
