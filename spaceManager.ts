@@ -140,6 +140,12 @@ export class SpaceManager {
 
   // Handle file renames across the entire Vault
   async handleFileRename(oldPath: string, newPath: string): Promise<void> {
+    // Clean up tempNoteSpaceMap entry if applicable
+    const map = (this as any).tempNoteSpaceMap;
+    if (map && map[oldPath]) {
+      delete map[oldPath];
+    }
+
     let changed = false;
     for (const space of this.settings.spaces) {
       // Update explicit file associations
@@ -182,6 +188,12 @@ export class SpaceManager {
 
   // Handle file deletions
   async handleFileDelete(filePath: string): Promise<void> {
+    // Clean up tempNoteSpaceMap entry if applicable
+    const map = (this as any).tempNoteSpaceMap;
+    if (map && map[filePath]) {
+      delete map[filePath];
+    }
+
     let changed = false;
     for (const space of this.settings.spaces) {
       const originalLen = space.files.length;
@@ -215,6 +227,25 @@ export class SpaceManager {
       const file = this.app.vault.getAbstractFileByPath(path);
       if (file instanceof TFile) {
         matchedFiles.add(file);
+      }
+    }
+
+    // Include any files created or tagged for this space (by space name frontmatter property or temp note mapping)
+    for (const file of allFiles) {
+      if (file.extension === 'md') {
+        const cachedSpaceId = (this as any).tempNoteSpaceMap?.[file.path];
+        if (cachedSpaceId === spaceId) {
+          matchedFiles.add(file);
+        } else {
+          // Fallback: check if the file's cache contains a 'space' property matching the space name
+          const cache = this.app.metadataCache.getFileCache(file);
+          if (cache && cache.frontmatter) {
+            const spaceName = cache.frontmatter.space || cache.frontmatter.projectSpace;
+            if (spaceName && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
+              matchedFiles.add(file);
+            }
+          }
+        }
       }
     }
 

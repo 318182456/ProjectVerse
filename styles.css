@@ -171,6 +171,15 @@
   padding-top: 16px;
   flex-grow: 1;
   overflow-y: auto;
+  transition: var(--vps-transition);
+  border: 1px solid transparent;
+  min-height: 250px; /* Expand drop zone area height */
+}
+
+.vps-tree-container.drag-over {
+  background-color: rgba(var(--interactive-accent-rgb), 0.05);
+  border: 1px dashed var(--interactive-accent);
+  border-radius: 8px;
 }
 
 .vps-tree-header {
@@ -228,6 +237,18 @@
 .vps-tree-node-depth-2 { padding-left: 28px; }
 .vps-tree-node-depth-3 { padding-left: 42px; }
 .vps-tree-node-depth-4 { padding-left: 56px; }
+
+/* Drag & Drop Visual Feedback */
+.vps-tree-node.is-dragging {
+  opacity: 0.4;
+  border: 1px dashed var(--text-muted);
+}
+
+.vps-tree-node.drag-over {
+  background-color: rgba(var(--interactive-accent-rgb), 0.15);
+  border: 1px solid var(--interactive-accent);
+  transform: scale(1.02);
+}
 
 /* 4. Dashboard View Styles */
 .vps-dashboard-container {

@@ -41,15 +41,18 @@ export class SaveNoteModal extends Modal {
           this.folderPath = value;
         });
         text.inputEl.style.width = '180px';
+        
+        // Expose text component so we can update it from the button callback
+        (this as any).folderTextComponent = text;
       })
       .addButton(btn => btn
         .setButtonText('浏览...')
         .onClick(() => {
           new FolderSuggestModal(this.app, (folder) => {
-            this.folderPath = folder.path;
-            const input = folderSetting.controlEl.querySelector('input');
-            if (input) {
-              (input as HTMLInputElement).value = folder.path;
+            const path = folder.path === '/' ? '/' : folder.path;
+            this.folderPath = path;
+            if ((this as any).folderTextComponent) {
+              (this as any).folderTextComponent.setValue(path);
             }
           }).open();
         })

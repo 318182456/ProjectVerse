@@ -22,6 +22,7 @@ export interface ProjectSpace {
   
   dashboard?: string;
   workspace?: WorkspaceState;
+  lastSavedFolderPath?: string; // Last saved folder path for this specific project space
 }
 
 export interface PluginSettings {

@@ -83,7 +83,13 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       })
     );
 
-    // Watch File Renames and Deletions
+    // Watch File Renames, Deletions, Creations, and Metadata Modifications
+    this.registerEvent(
+      this.app.vault.on('create', (file) => {
+        this.updateViews();
+      })
+    );
+
     this.registerEvent(
       this.app.vault.on('rename', async (file, oldPath) => {
         await this.spaceManager.handleFileRename(oldPath, file.path);
@@ -94,6 +100,12 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on('delete', async (file) => {
         await this.spaceManager.handleFileDelete(file.path);
+        this.updateViews();
+      })
+    );
+
+    this.registerEvent(
+      this.app.metadataCache.on('changed', (file) => {
         this.updateViews();
       })
     );
@@ -173,16 +185,22 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       }
     });
 
-    // Intercept Ctrl+S / Cmd+S to save temporary notes
-    this.registerDomEvent(window, 'keydown', (evt: KeyboardEvent) => {
-      if ((evt.ctrlKey || evt.metaKey) && evt.key === 's') {
+    // Intercept Ctrl+Shift+S / Cmd+Shift+S to save/move notes using capturing listener to beat editor hotkeys
+    this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
+      // Ensure the key itself is not a modifier key like Control, Meta, or Shift
+      if (evt.key === 'Control' || evt.key === 'Meta' || evt.key === 'Shift') {
+        return;
+      }
+      const isS = evt.key === 's' || evt.key === 'S' || evt.code === 'KeyS';
+      if ((evt.ctrlKey || evt.metaKey) && evt.shiftKey && isS) {
         const activeFile = this.app.workspace.getActiveFile();
-        if (activeFile && activeFile.name.startsWith('_temp_')) {
+        if (activeFile) {
           evt.preventDefault();
+          evt.stopPropagation();
           this.promptSaveTempNote(activeFile);
         }
       }
-    });
+    }, true);
   }
 
   async onunload() {
@@ -340,10 +358,23 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
   async promptSaveTempNote(file: TFile) {
     let defaultFolder = '/';
-    if (this.settings.activeSpaceId) {
-      const space = this.spaceManager.getSpace(this.settings.activeSpaceId);
-      if (space && space.folders.length > 0) {
-        defaultFolder = space.folders[0];
+    let activeSpace = this.settings.activeSpaceId ? this.spaceManager.getSpace(this.settings.activeSpaceId) : undefined;
+    
+    // Prioritize the space-specific last saved folder path first
+    if (activeSpace && activeSpace.lastSavedFolderPath && this.app.vault.getAbstractFileByPath(activeSpace.lastSavedFolderPath) instanceof TFolder) {
+      defaultFolder = activeSpace.lastSavedFolderPath;
+    } else if (activeSpace) {
+      if (activeSpace.folders.length > 0) {
+        defaultFolder = activeSpace.folders[0];
+      } else {
+        // If the space has no folders configured, check if a folder with the same name as the space exists in the vault.
+        // Try exact match first, then case-insensitive.
+        const folders = this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder) as TFolder[];
+        const matchingFolder = folders.find(f => f.name === activeSpace.name) || 
+                               folders.find(f => f.name.toLowerCase() === activeSpace.name.toLowerCase());
+        if (matchingFolder) {
+          defaultFolder = matchingFolder.path;
+        }
       }
     }
 
@@ -364,6 +395,41 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         await this.app.fileManager.renameFile(file, destPath);
         new Notice(`笔记已保存至: ${destPath}`);
         
+        // Save the chosen folder path as space-specific last saved folder path in settings
+        if (this.settings.activeSpaceId) {
+          await this.spaceManager.updateSpace(this.settings.activeSpaceId, {
+            lastSavedFolderPath: folderPath
+          });
+        }
+        
+        // Remove 'temp-note' tag and the > [!NOTE] temp banner from the file content
+        const savedFile = this.app.vault.getAbstractFileByPath(destPath);
+        if (savedFile instanceof TFile) {
+          let content = await this.app.vault.read(savedFile);
+          
+          // 1. Remove the note block (> [!NOTE] ... 保存并选择目标文件夹。)
+          content = content.replace(/>\s*\[!NOTE\]\s*\r?\n(>\s*这是临时笔记[^\r\n]*\r?\n?)+/gi, '');
+          content = content.replace(/>\s*这是临时笔记[^\r\n]*\r?\n?/gi, '');
+          
+          // 2. Remove 'temp-note' from tags frontmatter
+          // First, parse out the yaml frontmatter block
+          const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+          if (frontmatterMatch) {
+            let yaml = frontmatterMatch[1];
+            // Remove 'temp-note' list item or string tag
+            yaml = yaml.replace(/^\s*-\s*["']?temp-note["']?\s*\r?\n?/gm, '');
+            yaml = yaml.replace(/tags:\s*\[\s*["']?temp-note["']?\s*\]\r?\n?/gi, '');
+            yaml = yaml.replace(/tags:\s*["']?temp-note["']?\r?\n?/gi, '');
+            // If tags is now empty or has empty lines, clean it up
+            yaml = yaml.replace(/tags:\s*\r?\n(\s*\r?\n)+/gi, '');
+            content = content.replace(frontmatterMatch[1], yaml);
+          }
+
+          // Clean up empty lines or multiple consecutive spaces that may result
+          content = content.trim() + '\n';
+          await this.app.vault.modify(savedFile, content);
+        }
+
         if (this.settings.activeSpaceId) {
           const space = this.spaceManager.getSpace(this.settings.activeSpaceId);
           if (space) {
@@ -376,6 +442,12 @@ export default class VirtualProjectSpacePlugin extends Plugin {
           }
         }
         
+        // Ensure to remove the map reference after save has finalized
+        const map = (this.spaceManager as any).tempNoteSpaceMap;
+        if (map && map[file.path]) {
+          delete map[file.path];
+        }
+
         this.updateViews();
       } catch (e) {
         console.error("Failed to save temp note", e);
