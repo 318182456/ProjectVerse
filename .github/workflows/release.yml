@@ -2,8 +2,10 @@ name: Release Obsidian Plugin
 
 on:
   push:
-    tags:
-      - "*"
+    branches:
+      - main
+    paths:
+      - 'manifest.json'
 
 permissions:
   contents: write
@@ -15,22 +17,56 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from manifest.json
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if Tag Exists
+        id: check_tag
+        run: |
+          VERSION=${{ steps.get_version.outputs.version }}
+          if git rev-parse "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $VERSION already exists. Skipping release."
+          else
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Use Node.js
+        if: steps.check_tag.outputs.tag_exists == 'false'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install Dependencies
+        if: steps.check_tag.outputs.tag_exists == 'false'
         run: npm ci || npm install
 
       - name: Build Plugin
+        if: steps.check_tag.outputs.tag_exists == 'false'
         run: npm run build
 
+      - name: Create Git Tag
+        if: steps.check_tag.outputs.tag_exists == 'false'
+        run: |
+          VERSION=${{ steps.get_version.outputs.version }}
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$VERSION"
+          git push origin "$VERSION"
+
       - name: Create GitHub Release
+        if: steps.check_tag.outputs.tag_exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
           files: |
             manifest.json
             main.js
