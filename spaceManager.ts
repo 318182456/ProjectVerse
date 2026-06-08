@@ -53,6 +53,16 @@ export class SpaceManager {
     await this.saveSettingsCallback();
   }
 
+  async reorderSpaces(fromId: string, toId: string): Promise<void> {
+    const fromIdx = this.settings.spaces.findIndex(s => s.id === fromId);
+    const toIdx = this.settings.spaces.findIndex(s => s.id === toId);
+    if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
+      const [movedSpace] = this.settings.spaces.splice(fromIdx, 1);
+      this.settings.spaces.splice(toIdx, 0, movedSpace);
+      await this.saveSettingsCallback();
+    }
+  }
+
   async duplicateSpace(id: string): Promise<ProjectSpace | undefined> {
     const source = this.getSpace(id);
     if (!source) return undefined;

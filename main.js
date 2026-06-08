@@ -74,6 +74,15 @@ var SpaceManager = class {
     }
     await this.saveSettingsCallback();
   }
+  async reorderSpaces(fromId, toId) {
+    const fromIdx = this.settings.spaces.findIndex((s) => s.id === fromId);
+    const toIdx = this.settings.spaces.findIndex((s) => s.id === toId);
+    if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
+      const [movedSpace] = this.settings.spaces.splice(fromIdx, 1);
+      this.settings.spaces.splice(toIdx, 0, movedSpace);
+      await this.saveSettingsCallback();
+    }
+  }
   async duplicateSpace(id) {
     const source = this.getSpace(id);
     if (!source)
@@ -411,7 +420,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     return "\u9879\u76EE\u7A7A\u95F4";
   }
   getIcon() {
-    return "rocket";
+    return "layers";
   }
   async onOpen() {
     this.render();
@@ -427,8 +436,9 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     container.empty();
     container.addClass("vps-explorer-container");
     const header = container.createDiv({ cls: "vps-explorer-header" });
-    header.createDiv({ cls: "vps-explorer-title", text: "\u{1F680} \u9879\u76EE\u7A7A\u95F4" });
-    const addBtn = header.createDiv({ cls: "vps-space-action-btn" });
+    header.createDiv({ cls: "vps-explorer-title", text: "\u{1F5C2}\uFE0F \u9879\u76EE\u7A7A\u95F4" });
+    const headerActions = header.createDiv({ cls: "vps-explorer-header-actions" });
+    const addBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
     (0, import_obsidian3.setIcon)(addBtn, "plus");
     addBtn.setAttribute("title", "\u65B0\u5EFA\u7A7A\u95F4");
     addBtn.addEventListener("click", () => {
@@ -438,18 +448,43 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
         this.render();
       }).open();
     });
-    const searchWrapper = container.createDiv({ cls: "vps-search-wrapper" });
-    const searchInput = searchWrapper.createEl("input", {
-      cls: "vps-search-input",
-      type: "text",
-      value: this.searchKeyword,
-      placeholder: "\u641C\u7D22\u7A7A\u95F4\u6216\u6587\u4EF6..."
-    });
-    searchInput.addEventListener("input", (e) => {
-      this.searchKeyword = e.target.value;
-      this.render();
-    });
     const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
+    const activeSpace = activeSpaceId ? this.spaceManager.getSpace(activeSpaceId) : null;
+    if (activeSpace) {
+      const copyBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
+      (0, import_obsidian3.setIcon)(copyBtn, "copy");
+      copyBtn.setAttribute("title", "\u590D\u5236\u7A7A\u95F4");
+      copyBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const newSpace = await this.spaceManager.duplicateSpace(activeSpace.id);
+        if (newSpace) {
+          this.app.workspace.trigger("vps-space-activated", newSpace.id);
+        }
+        this.render();
+      });
+      const editBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
+      (0, import_obsidian3.setIcon)(editBtn, "pencil");
+      editBtn.setAttribute("title", "\u7F16\u8F91\u7A7A\u95F4");
+      editBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        new SpaceModal(this.app, async (name, icon, color) => {
+          await this.spaceManager.updateSpace(activeSpace.id, { name, icon, color });
+          this.render();
+          this.app.workspace.trigger("vps-space-updated", activeSpace.id);
+        }, activeSpace).open();
+      });
+      const deleteBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
+      (0, import_obsidian3.setIcon)(deleteBtn, "trash-2");
+      deleteBtn.setAttribute("title", "\u5220\u9664\u7A7A\u95F4");
+      deleteBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (confirm(`\u786E\u5B9A\u8981\u5220\u9664\u7A7A\u95F4 "${activeSpace.name}" \u5417\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u4F1A\u5220\u9664\u7269\u7406\u6587\u4EF6\u3002`)) {
+          await this.spaceManager.deleteSpace(activeSpace.id);
+          this.render();
+          this.app.workspace.trigger("vps-space-deleted", activeSpace.id);
+        }
+      });
+    }
     const spaces = this.spaceManager.getSpaces();
     const spacesListEl = container.createDiv({ cls: "vps-spaces-list" });
     spaces.forEach((space) => {
@@ -465,58 +500,46 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       (0, import_obsidian3.setIcon)(iconEl, space.icon.replace("lucide-", ""));
       const infoEl = spaceItem.createDiv({ cls: "vps-space-info" });
       infoEl.createDiv({ cls: "vps-space-name", text: space.name });
-      const fileCount = this.spaceManager.getSpaceFiles(space.id).length;
-      infoEl.createDiv({ cls: "vps-space-meta", text: `${fileCount} \u4E2A\u5173\u8054\u6587\u4EF6` });
-      const actionsEl = spaceItem.createDiv({ cls: "vps-space-actions" });
-      const copyBtn = actionsEl.createDiv({ cls: "vps-space-action-btn" });
-      (0, import_obsidian3.setIcon)(copyBtn, "copy");
-      copyBtn.setAttribute("title", "\u590D\u5236\u7A7A\u95F4");
-      copyBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        await this.spaceManager.duplicateSpace(space.id);
-        this.render();
-      });
-      const editBtn = actionsEl.createDiv({ cls: "vps-space-action-btn" });
-      (0, import_obsidian3.setIcon)(editBtn, "pencil");
-      editBtn.setAttribute("title", "\u7F16\u8F91\u7A7A\u95F4");
-      editBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        new SpaceModal(this.app, async (name, icon, color) => {
-          await this.spaceManager.updateSpace(space.id, { name, icon, color });
-          this.render();
-          this.app.workspace.trigger("vps-space-updated", space.id);
-        }, space).open();
-      });
-      const deleteBtn = actionsEl.createDiv({ cls: "vps-space-action-btn" });
-      (0, import_obsidian3.setIcon)(deleteBtn, "trash-2");
-      deleteBtn.setAttribute("title", "\u5220\u9664\u7A7A\u95F4");
-      deleteBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        if (confirm(`\u786E\u5B9A\u8981\u5220\u9664\u7A7A\u95F4 "${space.name}" \u5417\uFF1F\u6B64\u64CD\u4F5C\u4E0D\u4F1A\u5220\u9664\u7269\u7406\u6587\u4EF6\u3002`)) {
-          await this.spaceManager.deleteSpace(space.id);
-          this.render();
-          this.app.workspace.trigger("vps-space-deleted", space.id);
-        }
-      });
       spaceItem.addEventListener("click", () => {
         this.app.workspace.trigger("vps-space-activated", space.id);
       });
+      spaceItem.setAttribute("draggable", "true");
+      spaceItem.addEventListener("dragstart", (e) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData("vps-space-drag", space.id);
+          e.dataTransfer.effectAllowed = "move";
+        }
+        spaceItem.addClass("is-dragging");
+      });
+      spaceItem.addEventListener("dragend", () => {
+        spaceItem.removeClass("is-dragging");
+      });
+      spaceItem.addEventListener("dragover", (e) => {
+        if (e.dataTransfer && e.dataTransfer.types.includes("vps-space-drag")) {
+          e.preventDefault();
+          spaceItem.addClass("drag-over");
+        }
+      });
+      spaceItem.addEventListener("dragleave", () => {
+        spaceItem.removeClass("drag-over");
+      });
+      spaceItem.addEventListener("drop", async (e) => {
+        if (e.dataTransfer) {
+          const draggedId = e.dataTransfer.getData("vps-space-drag");
+          if (draggedId && draggedId !== space.id) {
+            e.preventDefault();
+            e.stopPropagation();
+            spaceItem.removeClass("drag-over");
+            await this.spaceManager.reorderSpaces(draggedId, space.id);
+            this.render();
+          }
+        }
+      });
     });
     if (activeSpaceId) {
-      const activeSpace = this.spaceManager.getSpace(activeSpaceId);
-      if (activeSpace) {
+      const activeSpace2 = this.spaceManager.getSpace(activeSpaceId);
+      if (activeSpace2) {
         const treeContainer = container.createDiv({ cls: "vps-tree-container" });
-        const treeHeader = treeContainer.createDiv({ cls: "vps-tree-header" });
-        treeHeader.createDiv({
-          cls: "vps-tree-title",
-          text: `${activeSpace.name} \u7684\u865A\u62DF\u89C6\u56FE`
-        });
-        const addFileBtn = treeHeader.createDiv({ cls: "vps-space-action-btn" });
-        (0, import_obsidian3.setIcon)(addFileBtn, "file-plus");
-        addFileBtn.setAttribute("title", "\u6253\u5F00 Dashboard \u9996\u9875");
-        addFileBtn.addEventListener("click", () => {
-          this.app.workspace.trigger("vps-open-dashboard", activeSpace.id);
-        });
         const files = this.spaceManager.getSpaceFiles(activeSpaceId);
         if (files.length === 0) {
           const d = treeContainer.createDiv({
@@ -1254,7 +1277,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       VIEW_TYPE_SPACE_DASHBOARD,
       (leaf) => new SpaceDashboardView(leaf, this.spaceManager)
     );
-    this.addRibbonIcon("rocket", "\u{1F680} \u9879\u76EE\u7A7A\u95F4 Explorer", () => {
+    this.addRibbonIcon("layers", "\u{1F5C2}\uFE0F \u9879\u76EE\u7A7A\u95F4 Explorer", () => {
       this.activateExplorerView();
     });
     this.registerEvent(
@@ -1449,6 +1472,26 @@ ${names}`);
     this.settings.activeSpaceId = spaceId;
     await this.savePluginSettings();
     this.updateViews();
+    const otherSpaces = this.settings.spaces.filter((s) => s.id !== spaceId);
+    const otherSpacesFiles = /* @__PURE__ */ new Set();
+    for (const os of otherSpaces) {
+      const files = this.spaceManager.getSpaceFiles(os.id);
+      for (const f of files) {
+        otherSpacesFiles.add(f.path);
+      }
+    }
+    const newSpaceFiles = this.spaceManager.getSpaceFiles(spaceId);
+    const newSpaceFilePaths = new Set(newSpaceFiles.map((f) => f.path));
+    this.app.workspace.iterateRootLeaves((leaf) => {
+      if (leaf.view.getViewType() === "markdown") {
+        const file = leaf.view.file;
+        if (file instanceof import_obsidian7.TFile) {
+          if (otherSpacesFiles.has(file.path) && !newSpaceFilePaths.has(file.path)) {
+            leaf.detach();
+          }
+        }
+      }
+    });
     if (this.settings.enableWorkspaceSync) {
       const newSpace = this.spaceManager.getSpace(spaceId);
       if (newSpace && newSpace.workspace && newSpace.workspace.openTabs.length > 0) {

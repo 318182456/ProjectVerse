@@ -40,6 +40,12 @@
   margin-bottom: 16px;
 }
 
+.vps-explorer-header-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
 .vps-explorer-title {
   font-size: 1.2em;
   font-weight: 700;
@@ -52,29 +58,19 @@
   position: relative;
 }
 
-.vps-search-input {
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--vps-card-border);
-  background-color: var(--background-primary);
-  font-size: 0.9em;
-  outline: none;
-  transition: var(--vps-transition);
-}
-
-.vps-search-input:focus {
-  border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+.vps-spaces-list {
+  display: flex;
+  gap: 4px;
 }
 
 /* Project Space Item Cards in Explorer */
 .vps-space-item {
   display: flex;
   align-items: center;
-  padding: 6px 10px;
-  margin-bottom: 6px;
-  border-radius: 8px;
+  flex-wrap: nowrap;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
   border: 1px solid var(--vps-card-border);
   background-color: var(--vps-card-bg);
   backdrop-filter: blur(var(--vps-blur));
@@ -95,18 +91,29 @@
   box-shadow: 0 0 8px rgba(var(--space-color-rgb, var(--interactive-accent-rgb)), 0.15);
 }
 
+.vps-space-item.is-dragging {
+  opacity: 0.4;
+  border: 1px dashed var(--text-muted);
+}
+
+.vps-space-item.drag-over {
+  background-color: rgba(var(--interactive-accent-rgb), 0.15);
+  border: 1px solid var(--interactive-accent);
+}
+
 .vps-space-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 4px;
-  margin-right: 8px;
+  margin-right: 6px;
   color: #fff;
   background-color: var(--space-color, var(--interactive-accent));
   transition: var(--vps-transition);
-  font-size: 0.85em;
+  font-size: 0.75em;
+  flex-shrink: 0;
 }
 
 .vps-space-info {
@@ -115,16 +122,19 @@
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .vps-space-name {
   font-weight: 600;
-  font-size: 0.88em;
+  font-size: 0.82em;
   color: var(--text-normal);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 120px;
+  max-width: 150px;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .vps-space-meta {
@@ -133,29 +143,22 @@
   margin-top: 0;
   margin-left: 8px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.vps-space-actions {
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: var(--vps-transition);
-}
 
-.vps-space-item:hover .vps-space-actions {
-  opacity: 1;
-}
 
 .vps-space-action-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
   cursor: pointer;
   color: var(--text-muted);
   transition: var(--vps-transition);
+  font-size: 0.75em;
 }
 
 .vps-space-action-btn:hover {
@@ -166,13 +169,12 @@
 
 /* 3. Virtual File Tree Styles */
 .vps-tree-container {
-  margin-top: 16px;
+  margin-top: 8px;
   border-top: 1px solid var(--vps-card-border);
-  padding-top: 16px;
+  padding-top: 8px;
   flex-grow: 1;
   overflow-y: auto;
   transition: var(--vps-transition);
-  border: 1px solid transparent;
   min-height: 250px; /* Expand drop zone area height */
 }
 

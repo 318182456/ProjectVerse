@@ -32,7 +32,7 @@ export class SpaceExplorerView extends ItemView {
   }
 
   getIcon(): string {
-    return 'rocket';
+    return 'layers';
   }
 
   async onOpen() {
@@ -55,9 +55,11 @@ export class SpaceExplorerView extends ItemView {
 
     // 1. Header
     const header = container.createDiv({ cls: 'vps-explorer-header' });
-    header.createDiv({ cls: 'vps-explorer-title', text: '🚀 项目空间' });
+    header.createDiv({ cls: 'vps-explorer-title', text: '🗂️ 项目空间' });
     
-    const addBtn = header.createDiv({ cls: 'vps-space-action-btn' });
+    const headerActions = header.createDiv({ cls: 'vps-explorer-header-actions' });
+    
+    const addBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
     setIcon(addBtn, 'plus');
     addBtn.setAttribute('title', '新建空间');
     addBtn.addEventListener('click', () => {
@@ -69,21 +71,51 @@ export class SpaceExplorerView extends ItemView {
       }).open();
     });
 
-    // 2. Search Bar
-    const searchWrapper = container.createDiv({ cls: 'vps-search-wrapper' });
-    const searchInput = searchWrapper.createEl('input', {
-      cls: 'vps-search-input',
-      type: 'text',
-      value: this.searchKeyword,
-      placeholder: '搜索空间或文件...'
-    });
-    searchInput.addEventListener('input', (e) => {
-      this.searchKeyword = (e.target as HTMLInputElement).value;
-      this.render();
-    });
-
-    // 3. Space List
     const activeSpaceId = (this.app as any).plugins?.plugins?.['projectVerse']?.settings?.activeSpaceId;
+    const activeSpace = activeSpaceId ? this.spaceManager.getSpace(activeSpaceId) : null;
+
+    if (activeSpace) {
+      // Copy Space
+      const copyBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
+      setIcon(copyBtn, 'copy');
+      copyBtn.setAttribute('title', '复制空间');
+      copyBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const newSpace = await this.spaceManager.duplicateSpace(activeSpace.id);
+        if (newSpace) {
+          this.app.workspace.trigger('vps-space-activated', newSpace.id);
+        }
+        this.render();
+      });
+
+      // Edit Space
+      const editBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
+      setIcon(editBtn, 'pencil');
+      editBtn.setAttribute('title', '编辑空间');
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        new SpaceModal(this.app, async (name, icon, color) => {
+          await this.spaceManager.updateSpace(activeSpace.id, { name, icon, color });
+          this.render();
+          this.app.workspace.trigger('vps-space-updated', activeSpace.id);
+        }, activeSpace).open();
+      });
+
+      // Delete Space
+      const deleteBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
+      setIcon(deleteBtn, 'trash-2');
+      deleteBtn.setAttribute('title', '删除空间');
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (confirm(`确定要删除空间 "${activeSpace.name}" 吗？此操作不会删除物理文件。`)) {
+          await this.spaceManager.deleteSpace(activeSpace.id);
+          this.render();
+          this.app.workspace.trigger('vps-space-deleted', activeSpace.id);
+        }
+      });
+    }
+
+    // 2. Space List
     const spaces = this.spaceManager.getSpaces();
 
     const spacesListEl = container.createDiv({ cls: 'vps-spaces-list' });
@@ -107,52 +139,49 @@ export class SpaceExplorerView extends ItemView {
 
       const infoEl = spaceItem.createDiv({ cls: 'vps-space-info' });
       infoEl.createDiv({ cls: 'vps-space-name', text: space.name });
-      
-      const fileCount = this.spaceManager.getSpaceFiles(space.id).length;
-      infoEl.createDiv({ cls: 'vps-space-meta', text: `${fileCount} 个关联文件` });
-
-      // Actions
-      const actionsEl = spaceItem.createDiv({ cls: 'vps-space-actions' });
-      
-      // Copy Space
-      const copyBtn = actionsEl.createDiv({ cls: 'vps-space-action-btn' });
-      setIcon(copyBtn, 'copy');
-      copyBtn.setAttribute('title', '复制空间');
-      copyBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await this.spaceManager.duplicateSpace(space.id);
-        this.render();
-      });
-
-      // Edit Space
-      const editBtn = actionsEl.createDiv({ cls: 'vps-space-action-btn' });
-      setIcon(editBtn, 'pencil');
-      editBtn.setAttribute('title', '编辑空间');
-      editBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        new SpaceModal(this.app, async (name, icon, color) => {
-          await this.spaceManager.updateSpace(space.id, { name, icon, color });
-          this.render();
-          this.app.workspace.trigger('vps-space-updated', space.id);
-        }, space).open();
-      });
-
-      // Delete Space
-      const deleteBtn = actionsEl.createDiv({ cls: 'vps-space-action-btn' });
-      setIcon(deleteBtn, 'trash-2');
-      deleteBtn.setAttribute('title', '删除空间');
-      deleteBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (confirm(`确定要删除空间 "${space.name}" 吗？此操作不会删除物理文件。`)) {
-          await this.spaceManager.deleteSpace(space.id);
-          this.render();
-          this.app.workspace.trigger('vps-space-deleted', space.id);
-        }
-      });
 
       // Activate Space on click
       spaceItem.addEventListener('click', () => {
         this.app.workspace.trigger('vps-space-activated', space.id);
+      });
+
+      // Drag & Drop for reordering spaces
+      spaceItem.setAttribute('draggable', 'true');
+      
+      spaceItem.addEventListener('dragstart', (e: DragEvent) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('vps-space-drag', space.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }
+        spaceItem.addClass('is-dragging');
+      });
+
+      spaceItem.addEventListener('dragend', () => {
+        spaceItem.removeClass('is-dragging');
+      });
+
+      spaceItem.addEventListener('dragover', (e: DragEvent) => {
+        if (e.dataTransfer && e.dataTransfer.types.includes('vps-space-drag')) {
+          e.preventDefault();
+          spaceItem.addClass('drag-over');
+        }
+      });
+
+      spaceItem.addEventListener('dragleave', () => {
+        spaceItem.removeClass('drag-over');
+      });
+
+      spaceItem.addEventListener('drop', async (e: DragEvent) => {
+        if (e.dataTransfer) {
+          const draggedId = e.dataTransfer.getData('vps-space-drag');
+          if (draggedId && draggedId !== space.id) {
+            e.preventDefault();
+            e.stopPropagation();
+            spaceItem.removeClass('drag-over');
+            await this.spaceManager.reorderSpaces(draggedId, space.id);
+            this.render();
+          }
+        }
       });
     });
 
@@ -162,19 +191,7 @@ export class SpaceExplorerView extends ItemView {
       if (activeSpace) {
         const treeContainer = container.createDiv({ cls: 'vps-tree-container' });
         
-        // Tree Header
-        const treeHeader = treeContainer.createDiv({ cls: 'vps-tree-header' });
-        treeHeader.createDiv({ 
-          cls: 'vps-tree-title', 
-          text: `${activeSpace.name} 的虚拟视图` 
-        });
 
-        const addFileBtn = treeHeader.createDiv({ cls: 'vps-space-action-btn' });
-        setIcon(addFileBtn, 'file-plus');
-        addFileBtn.setAttribute('title', '打开 Dashboard 首页');
-        addFileBtn.addEventListener('click', () => {
-          this.app.workspace.trigger('vps-open-dashboard', activeSpace.id);
-        });
 
         // Build Virtual Folder Tree
         const files = this.spaceManager.getSpaceFiles(activeSpaceId);

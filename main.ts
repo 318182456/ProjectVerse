@@ -34,7 +34,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     );
 
     // Ribbon Icon
-    this.addRibbonIcon('rocket', '🚀 项目空间 Explorer', () => {
+    this.addRibbonIcon('layers', '🗂️ 项目空间 Explorer', () => {
       this.activateExplorerView();
     });
 
@@ -272,6 +272,30 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     this.settings.activeSpaceId = spaceId;
     await this.savePluginSettings();
     this.updateViews();
+
+    // Close open markdown tabs belonging to other spaces, but not the new space
+    const otherSpaces = this.settings.spaces.filter(s => s.id !== spaceId);
+    const otherSpacesFiles = new Set<string>();
+    for (const os of otherSpaces) {
+      const files = this.spaceManager.getSpaceFiles(os.id);
+      for (const f of files) {
+        otherSpacesFiles.add(f.path);
+      }
+    }
+
+    const newSpaceFiles = this.spaceManager.getSpaceFiles(spaceId);
+    const newSpaceFilePaths = new Set(newSpaceFiles.map(f => f.path));
+
+    this.app.workspace.iterateRootLeaves((leaf) => {
+      if (leaf.view.getViewType() === 'markdown') {
+        const file = (leaf.view as any).file;
+        if (file instanceof TFile) {
+          if (otherSpacesFiles.has(file.path) && !newSpaceFilePaths.has(file.path)) {
+            leaf.detach();
+          }
+        }
+      }
+    });
 
     // Restore workspace layout state for the new space
     if (this.settings.enableWorkspaceSync) {
