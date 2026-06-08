@@ -36,8 +36,10 @@ export class SpaceDashboardView extends ItemView {
   }
 
   getDisplayText(): string {
-    if (this.spaceId) {
-      const space = this.spaceManager.getSpace(this.spaceId);
+    const activeSpaceId = (this.app as any).plugins?.plugins?.['virtual-project-space']?.settings?.activeSpaceId;
+    const targetId = this.spaceId || activeSpaceId;
+    if (targetId) {
+      const space = this.spaceManager.getSpace(targetId);
       if (space) return `${space.name} - Dashboard`;
     }
     return '项目控制面板';
@@ -57,10 +59,14 @@ export class SpaceDashboardView extends ItemView {
   }
 
   async render() {
-    const container = this.containerEl.children[1];
+    const activeSpaceId = (this.app as any).plugins?.plugins?.['virtual-project-space']?.settings?.activeSpaceId;
+    const targetId = activeSpaceId || this.spaceId;
+    this.spaceId = targetId;
+
+    const container = this.contentEl;
     container.empty();
 
-    if (!this.spaceId) {
+    if (!targetId) {
       const d = container.createDiv({
         text: '请在侧边栏选择并激活一个项目空间以加载 Dashboard。',
         cls: 'vps-space-meta'
@@ -69,7 +75,7 @@ export class SpaceDashboardView extends ItemView {
       return;
     }
 
-    const space = this.spaceManager.getSpace(this.spaceId);
+    const space = this.spaceManager.getSpace(targetId);
     if (!space) {
       const d = container.createDiv({
         text: '未找到选定的项目空间。',

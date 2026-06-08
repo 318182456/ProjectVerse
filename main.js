@@ -631,8 +631,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     return VIEW_TYPE_SPACE_DASHBOARD;
   }
   getDisplayText() {
-    if (this.spaceId) {
-      const space = this.spaceManager.getSpace(this.spaceId);
+    const activeSpaceId = this.app.plugins?.plugins?.["virtual-project-space"]?.settings?.activeSpaceId;
+    const targetId = this.spaceId || activeSpaceId;
+    if (targetId) {
+      const space = this.spaceManager.getSpace(targetId);
       if (space)
         return `${space.name} - Dashboard`;
     }
@@ -649,9 +651,12 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     this.render();
   }
   async render() {
-    const container = this.containerEl.children[1];
+    const activeSpaceId = this.app.plugins?.plugins?.["virtual-project-space"]?.settings?.activeSpaceId;
+    const targetId = activeSpaceId || this.spaceId;
+    this.spaceId = targetId;
+    const container = this.contentEl;
     container.empty();
-    if (!this.spaceId) {
+    if (!targetId) {
       const d = container.createDiv({
         text: "\u8BF7\u5728\u4FA7\u8FB9\u680F\u9009\u62E9\u5E76\u6FC0\u6D3B\u4E00\u4E2A\u9879\u76EE\u7A7A\u95F4\u4EE5\u52A0\u8F7D Dashboard\u3002",
         cls: "vps-space-meta"
@@ -659,7 +664,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       d.style.cssText = "padding: 24px; text-align: center;";
       return;
     }
-    const space = this.spaceManager.getSpace(this.spaceId);
+    const space = this.spaceManager.getSpace(targetId);
     if (!space) {
       const d = container.createDiv({
         text: "\u672A\u627E\u5230\u9009\u5B9A\u7684\u9879\u76EE\u7A7A\u95F4\u3002",
