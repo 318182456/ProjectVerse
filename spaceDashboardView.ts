@@ -148,11 +148,13 @@ export class SpaceDashboardView extends ItemView {
     }
 
     // Load tasks from space files and data
-    await this.scanTasks(space);
+    const loadedTasks = await this.scanTasks(space);
 
     if (renderVersion !== this.currentRenderVersion) {
       return;
     }
+
+    this.tasks = loadedTasks;
 
     // Load persistent setting for hideCompleted
     this.hideCompleted = space.hideCompletedTasks || false;
@@ -264,7 +266,6 @@ export class SpaceDashboardView extends ItemView {
                   completed: false
                 });
                 await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
-                this.render();
               }
             }).open();
           });
@@ -284,7 +285,6 @@ export class SpaceDashboardView extends ItemView {
                 if (currentSpace && currentSpace.tasks) {
                   currentSpace.tasks = currentSpace.tasks.filter(t => t.id !== taskId);
                   await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
-                  this.render();
                 }
               });
           });
@@ -343,9 +343,9 @@ export class SpaceDashboardView extends ItemView {
     }
   }
 
-  private async scanTasks(space: ProjectSpace) {
+  private async scanTasks(space: ProjectSpace): Promise<SpaceTask[]> {
     const files = this.spaceManager.getSpaceFiles(space.id);
-    this.tasks = [];
+    const tasks: SpaceTask[] = [];
 
     // Scan file-based tasks
     for (const file of files) {
@@ -360,7 +360,7 @@ export class SpaceDashboardView extends ItemView {
         if (match) {
           const completed = match[1].toLowerCase() === "x";
           const text = match[2].trim();
-          this.tasks.push({
+          tasks.push({
             file,
             lineIndex: index,
             text,
@@ -374,13 +374,15 @@ export class SpaceDashboardView extends ItemView {
     // Load custom tasks stored in data settings
     if (space.tasks) {
       space.tasks.forEach(customTask => {
-        this.tasks.push({
+        tasks.push({
           text: customTask.text,
           completed: customTask.completed,
           customTaskId: customTask.id
         });
       });
     }
+
+    return tasks;
   }
 
   private async toggleTaskCompletion(task: SpaceTask) {

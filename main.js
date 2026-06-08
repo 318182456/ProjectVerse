@@ -1454,10 +1454,11 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       d.style.cssText = "padding: 24px; text-align: center;";
       return;
     }
-    await this.scanTasks(space);
+    const loadedTasks = await this.scanTasks(space);
     if (renderVersion !== this.currentRenderVersion) {
       return;
     }
+    this.tasks = loadedTasks;
     this.hideCompleted = space.hideCompletedTasks || false;
     container.empty();
     const dashboardEl = container.createDiv({ cls: "vps-dashboard-container" });
@@ -1540,7 +1541,6 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
                 completed: false
               });
               await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
-              this.render();
             }
           }).open();
         });
@@ -1557,7 +1557,6 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
               if (currentSpace && currentSpace.tasks) {
                 currentSpace.tasks = currentSpace.tasks.filter((t) => t.id !== taskId);
                 await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
-                this.render();
               }
             });
           });
@@ -1606,7 +1605,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
   }
   async scanTasks(space) {
     const files = this.spaceManager.getSpaceFiles(space.id);
-    this.tasks = [];
+    const tasks = [];
     for (const file of files) {
       if (file.extension !== "md")
         continue;
@@ -1617,7 +1616,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         if (match) {
           const completed = match[1].toLowerCase() === "x";
           const text = match[2].trim();
-          this.tasks.push({
+          tasks.push({
             file,
             lineIndex: index,
             text,
@@ -1629,13 +1628,14 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     }
     if (space.tasks) {
       space.tasks.forEach((customTask) => {
-        this.tasks.push({
+        tasks.push({
           text: customTask.text,
           completed: customTask.completed,
           customTaskId: customTask.id
         });
       });
     }
+    return tasks;
   }
   async toggleTaskCompletion(task) {
     if (task.customTaskId) {
