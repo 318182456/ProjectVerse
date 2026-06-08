@@ -377,7 +377,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
   constructor(leaf, spaceManager) {
     super(leaf);
     this.searchKeyword = "";
-    this.collapsedPaths = /* @__PURE__ */ new Set();
+    this.expandedPaths = /* @__PURE__ */ new Set();
     this.spaceManager = spaceManager;
   }
   getViewType() {
@@ -556,7 +556,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     });
     sortedKeys.forEach((key) => {
       const childNode = node.children.get(key);
-      const isExpanded = !this.collapsedPaths.has(childNode.path);
+      const isExpanded = this.expandedPaths.has(childNode.path);
       const nodeEl = parentEl.createDiv({
         cls: `vps-tree-node vps-tree-node-depth-${depth}`
       });
@@ -594,10 +594,10 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       if (childNode.isFolder) {
         nodeEl.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (this.collapsedPaths.has(childNode.path)) {
-            this.collapsedPaths.delete(childNode.path);
+          if (this.expandedPaths.has(childNode.path)) {
+            this.expandedPaths.delete(childNode.path);
           } else {
-            this.collapsedPaths.add(childNode.path);
+            this.expandedPaths.add(childNode.path);
           }
           this.render();
         });
@@ -624,7 +624,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
   constructor(leaf, spaceManager) {
     super(leaf);
     this.tasks = [];
-    this.collapsedPaths = /* @__PURE__ */ new Set();
+    this.expandedPaths = /* @__PURE__ */ new Set();
     this.spaceManager = spaceManager;
   }
   getViewType() {
@@ -861,7 +861,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     });
     sortedKeys.forEach((key) => {
       const childNode = node.children.get(key);
-      const isExpanded = !this.collapsedPaths.has(childNode.path);
+      const isExpanded = this.expandedPaths.has(childNode.path);
       const nodeEl = parentEl.createDiv({
         cls: `vps-tree-node vps-tree-node-depth-${depth}`
       });
@@ -871,10 +871,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       if (childNode.isFolder) {
         nodeEl.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (this.collapsedPaths.has(childNode.path)) {
-            this.collapsedPaths.delete(childNode.path);
+          if (this.expandedPaths.has(childNode.path)) {
+            this.expandedPaths.delete(childNode.path);
           } else {
-            this.collapsedPaths.add(childNode.path);
+            this.expandedPaths.add(childNode.path);
           }
           this.render();
         });

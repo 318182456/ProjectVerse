@@ -24,7 +24,7 @@ export class SpaceDashboardView extends ItemView {
   private spaceManager: SpaceManager;
   private spaceId?: string;
   private tasks: SpaceTask[] = [];
-  private collapsedPaths: Set<string> = new Set<string>();
+  private expandedPaths: Set<string> = new Set<string>();
 
   constructor(leaf: WorkspaceLeaf, spaceManager: SpaceManager) {
     super(leaf);
@@ -318,7 +318,7 @@ export class SpaceDashboardView extends ItemView {
 
     sortedKeys.forEach(key => {
       const childNode = node.children.get(key)!;
-      const isExpanded = !this.collapsedPaths.has(childNode.path);
+      const isExpanded = this.expandedPaths.has(childNode.path);
 
       const nodeEl = parentEl.createDiv({ 
         cls: `vps-tree-node vps-tree-node-depth-${depth}` 
@@ -332,10 +332,10 @@ export class SpaceDashboardView extends ItemView {
       if (childNode.isFolder) {
         nodeEl.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (this.collapsedPaths.has(childNode.path)) {
-            this.collapsedPaths.delete(childNode.path);
+          if (this.expandedPaths.has(childNode.path)) {
+            this.expandedPaths.delete(childNode.path);
           } else {
-            this.collapsedPaths.add(childNode.path);
+            this.expandedPaths.add(childNode.path);
           }
           this.render();
         });
