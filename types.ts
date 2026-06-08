@@ -8,6 +8,12 @@ export interface WorkspaceState {
   activeTab?: string;
 }
 
+export interface SpaceCustomTask {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 export interface ProjectSpace {
   id: string;
   name: string;
@@ -23,6 +29,8 @@ export interface ProjectSpace {
   dashboard?: string;
   workspace?: WorkspaceState;
   lastSavedFolderPath?: string; // Last saved folder path for this specific project space
+  hideCompletedTasks?: boolean;
+  tasks?: SpaceCustomTask[];
 }
 
 export interface PluginSettings {

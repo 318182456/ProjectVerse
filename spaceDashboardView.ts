@@ -5,6 +5,10 @@ import {
   TFile,
   normalizePath,
   Notice,
+  App,
+  Menu,
+  Modal,
+  Setting,
 } from "obsidian";
 import { SpaceManager } from "./spaceManager";
 import { ProjectSpace } from "./types";
@@ -12,26 +16,65 @@ import { ProjectSpace } from "./types";
 export const VIEW_TYPE_SPACE_DASHBOARD = "virtual-project-space-dashboard";
 
 interface SpaceTask {
-  file: TFile;
-  lineIndex: number;
+  file?: TFile;
+  lineIndex?: number;
   text: string;
   completed: boolean;
-  rawLine: string;
+  rawLine?: string;
+  customTaskId?: string;
 }
 
-interface VirtualNode {
-  name: string;
-  path: string;
-  isFolder: boolean;
-  children: Map<string, VirtualNode>;
-  file?: TFile;
+class TodoModal extends Modal {
+  private onSubmit: (text: string) => void;
+  private text: string = "";
+
+  constructor(app: App, onSubmit: (text: string) => void) {
+    super(app);
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "添加待办任务" });
+
+    new Setting(contentEl)
+      .setName("任务内容")
+      .addText(text => text
+        .setPlaceholder("请输入待办事项内容")
+        .onChange(value => {
+          this.text = value;
+        })
+      );
+
+    new Setting(contentEl)
+      .addButton(btn => btn
+        .setButtonText("添加")
+        .setCta()
+        .onClick(() => {
+          if (this.text.trim()) {
+            this.onSubmit(this.text.trim());
+            this.close();
+          }
+        })
+      )
+      .addButton(btn => btn
+        .setButtonText("取消")
+        .onClick(() => {
+          this.close();
+        })
+      );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
 }
 
 export class SpaceDashboardView extends ItemView {
   private spaceManager: SpaceManager;
   private spaceId?: string;
   private tasks: SpaceTask[] = [];
-  private expandedPaths: Set<string> = new Set<string>();
   private currentRenderVersion = 0;
   private hideCompleted = false;
 
@@ -104,12 +147,15 @@ export class SpaceDashboardView extends ItemView {
       return;
     }
 
-    // Load tasks from space files
+    // Load tasks from space files and data
     await this.scanTasks(space);
 
     if (renderVersion !== this.currentRenderVersion) {
       return;
     }
+
+    // Load persistent setting for hideCompleted
+    this.hideCompleted = space.hideCompletedTasks || false;
 
     container.empty();
 
@@ -167,34 +213,8 @@ export class SpaceDashboardView extends ItemView {
     rulesStat.createDiv({ cls: "vps-stat-value", text: String(rulesCount) });
     rulesStat.createDiv({ cls: "vps-stat-label", text: "关联规则数" });
 
-    // 3. Grid for Files and Tasks Cards
+    // 3. Grid for Tasks Card (Files List card has been removed)
     const grid = dashboardEl.createDiv({ cls: "vps-dashboard-grid" });
-
-    // Card A: Files List
-    const filesCard = grid.createDiv({ cls: "vps-dashboard-card" });
-    const filesTitle = filesCard.createDiv({
-      cls: "vps-dashboard-card-title",
-      text: "📄 项目文件",
-    });
-
-    const quickActions = filesTitle.createDiv({ cls: "vps-quick-actions" });
-    const addNoteBtn = quickActions.createEl("button", {
-      cls: "vps-btn vps-btn-secondary",
-      text: "新建笔记",
-    });
-    addNoteBtn.style.setProperty("--space-color", space.color);
-    addNoteBtn.addEventListener("click", () => this.createNewSpaceNote(space));
-
-    const filesList = filesCard.createDiv();
-    filesList.style.cssText =
-      "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;";
-    const allSpaceFiles = this.spaceManager.getSpaceFiles(space.id);
-    if (allSpaceFiles.length === 0) {
-      filesList.createDiv({ text: "当前空间无文件", cls: "vps-space-meta" });
-    } else {
-      const rootNode = this.buildVirtualTree(allSpaceFiles);
-      this.renderTreeNodes(filesList, rootNode, 0);
-    }
 
     // Card B: Tasks List
     const tasksCard = grid.createDiv({ cls: "vps-dashboard-card" });
@@ -216,14 +236,63 @@ export class SpaceDashboardView extends ItemView {
     hideCompletedCheckbox.checked = this.hideCompleted;
     hideCompletedLabel.createSpan({ text: "隐藏已完成" });
 
-    hideCompletedCheckbox.addEventListener("change", () => {
+    hideCompletedCheckbox.addEventListener("change", async () => {
       this.hideCompleted = hideCompletedCheckbox.checked;
+      await this.spaceManager.updateSpace(space.id, { hideCompletedTasks: this.hideCompleted });
       this.render();
     });
 
     const tasksList = tasksCard.createDiv();
     tasksList.style.cssText =
       "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;";
+
+    // Context Menu for Tasks Card (Right click to add todo task)
+    tasksCard.addEventListener("contextmenu", (event: MouseEvent) => {
+      event.preventDefault();
+      const menu = new Menu();
+      menu.addItem((item) => {
+        item.setTitle("添加待办任务")
+          .setIcon("plus")
+          .onClick(() => {
+            new TodoModal(this.app, async (text) => {
+              const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+              if (currentSpace) {
+                if (!currentSpace.tasks) currentSpace.tasks = [];
+                currentSpace.tasks.push({
+                  id: Math.random().toString(36).substring(2, 11),
+                  text,
+                  completed: false
+                });
+                await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
+                this.render();
+              }
+            }).open();
+          });
+      });
+
+      const target = event.target as HTMLElement;
+      const taskItemEl = target.closest(".vps-task-item");
+      if (taskItemEl) {
+        const taskId = taskItemEl.getAttribute("data-task-id");
+        if (taskId) {
+          menu.addSeparator();
+          menu.addItem((item) => {
+            item.setTitle("删除待办任务")
+              .setIcon("trash")
+              .onClick(async () => {
+                const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+                if (currentSpace && currentSpace.tasks) {
+                  currentSpace.tasks = currentSpace.tasks.filter(t => t.id !== taskId);
+                  await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
+                  this.render();
+                }
+              });
+          });
+        }
+      }
+
+      menu.showAtPosition({ x: event.clientX, y: event.clientY });
+    });
 
     const displayedTasks = this.hideCompleted
       ? this.tasks.filter((t) => !t.completed)
@@ -237,10 +306,14 @@ export class SpaceDashboardView extends ItemView {
         cls: "vps-space-meta",
       });
     } else {
-      displayedTasks.forEach((task, idx) => {
+      displayedTasks.forEach((task) => {
         const taskRow = tasksList.createDiv({
           cls: `vps-task-item ${task.completed ? "is-completed" : ""}`,
         });
+
+        if (task.customTaskId) {
+          taskRow.setAttribute("data-task-id", task.customTaskId);
+        }
 
         const checkbox = taskRow.createEl("input", {
           cls: "vps-task-checkbox",
@@ -264,7 +337,7 @@ export class SpaceDashboardView extends ItemView {
 
         taskRow.createDiv({
           cls: "vps-task-source",
-          text: task.file.basename,
+          text: task.file ? task.file.basename : "数据",
         });
       });
     }
@@ -274,6 +347,7 @@ export class SpaceDashboardView extends ItemView {
     const files = this.spaceManager.getSpaceFiles(space.id);
     this.tasks = [];
 
+    // Scan file-based tasks
     for (const file of files) {
       if (file.extension !== "md") continue;
 
@@ -296,10 +370,35 @@ export class SpaceDashboardView extends ItemView {
         }
       });
     }
+
+    // Load custom tasks stored in data settings
+    if (space.tasks) {
+      space.tasks.forEach(customTask => {
+        this.tasks.push({
+          text: customTask.text,
+          completed: customTask.completed,
+          customTaskId: customTask.id
+        });
+      });
+    }
   }
 
   private async toggleTaskCompletion(task: SpaceTask) {
+    if (task.customTaskId) {
+      const space = this.spaceManager.getSpace(this.spaceId!);
+      if (space && space.tasks) {
+        const customTask = space.tasks.find(t => t.id === task.customTaskId);
+        if (customTask) {
+          customTask.completed = !task.completed;
+          task.completed = customTask.completed;
+          await this.spaceManager.updateSpace(space.id, { tasks: space.tasks });
+        }
+      }
+      return;
+    }
+
     const file = task.file;
+    if (!file || task.lineIndex === undefined) return;
     const content = await this.app.vault.read(file);
     const lines = content.split("\n");
 
@@ -324,148 +423,6 @@ export class SpaceDashboardView extends ItemView {
       task.completed = newCompletedState;
       task.rawLine = updatedLine;
     }
-  }
-
-  private async createNewSpaceNote(space: ProjectSpace) {
-    const timestamp = Date.now();
-    let noteName = `_temp_${timestamp}_未命名笔记`;
-    let fullPath = normalizePath(`${noteName}.md`);
-
-    let counter = 1;
-    while (this.app.vault.getAbstractFileByPath(fullPath)) {
-      noteName = `_temp_${timestamp}_未命名笔记 (${counter})`;
-      fullPath = normalizePath(`${noteName}.md`);
-      counter++;
-    }
-
-    const templateContent = `---
-space: "${space.name}"
-tags:
-  - "temp-note"
----
-
-> [!NOTE]
-> 这是临时笔记。请按 **Ctrl+Shift+S**（或 Cmd+Shift+S）保存并选择目标文件夹。
-
-
-`;
-    // Register the mapping in spaceManager before creating the file
-    const managerAny = this.spaceManager as any;
-    if (!managerAny.tempNoteSpaceMap) {
-      managerAny.tempNoteSpaceMap = {};
-    }
-    managerAny.tempNoteSpaceMap[fullPath] = space.id;
-
-    const newFile = await this.app.vault.create(fullPath, templateContent);
-
-    // Open the new file
-    this.app.workspace.getLeaf(false).openFile(newFile);
-    this.render();
-
-    new Notice(
-      "已创建临时笔记，请编辑后按下 Ctrl+Shift+S 选择目标文件夹保存。",
-    );
-  }
-
-  private buildVirtualTree(files: TFile[]): VirtualNode {
-    const root: VirtualNode = {
-      name: "root",
-      path: "",
-      isFolder: true,
-      children: new Map<string, VirtualNode>(),
-    };
-
-    files.forEach((file) => {
-      const parts = file.path.split("/");
-      let current = root;
-
-      for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-        const isLast = i === parts.length - 1;
-        const currentPath = parts.slice(0, i + 1).join("/");
-
-        if (isLast) {
-          current.children.set(part, {
-            name: part,
-            path: currentPath,
-            isFolder: false,
-            children: new Map(),
-            file,
-          });
-        } else {
-          if (!current.children.has(part)) {
-            current.children.set(part, {
-              name: part,
-              path: currentPath,
-              isFolder: true,
-              children: new Map(),
-            });
-          }
-          current = current.children.get(part)!;
-        }
-      }
-    });
-
-    return root;
-  }
-
-  private renderTreeNodes(
-    parentEl: HTMLElement,
-    node: VirtualNode,
-    depth: number,
-  ) {
-    const sortedKeys = Array.from(node.children.keys()).sort((a, b) => {
-      const nodeA = node.children.get(a)!;
-      const nodeB = node.children.get(b)!;
-      if (nodeA.isFolder && !nodeB.isFolder) return -1;
-      if (!nodeA.isFolder && nodeB.isFolder) return 1;
-      return a.localeCompare(b);
-    });
-
-    sortedKeys.forEach((key) => {
-      const childNode = node.children.get(key)!;
-      const isExpanded = this.expandedPaths.has(childNode.path);
-
-      const nodeEl = parentEl.createDiv({
-        cls: `vps-tree-node vps-tree-node-depth-${depth}`,
-      });
-
-      const iconEl = nodeEl.createDiv({ cls: "vps-tree-node-icon" });
-      setIcon(
-        iconEl,
-        childNode.isFolder
-          ? isExpanded
-            ? "chevron-down"
-            : "chevron-right"
-          : "file-text",
-      );
-
-      nodeEl.createDiv({ cls: "vps-tree-node-name", text: childNode.name });
-
-      if (childNode.isFolder) {
-        nodeEl.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (this.expandedPaths.has(childNode.path)) {
-            this.expandedPaths.delete(childNode.path);
-          } else {
-            this.expandedPaths.add(childNode.path);
-          }
-          this.render();
-        });
-
-        if (isExpanded) {
-          const childrenContainer = parentEl.createDiv();
-          this.renderTreeNodes(childrenContainer, childNode, depth + 1);
-        }
-      } else {
-        nodeEl.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (childNode.file) {
-            this.app.workspace.getLeaf(false).openFile(childNode.file);
-          }
-        });
-      }
-    });
   }
 
   // Helper to adjust color brightness

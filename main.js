@@ -1361,11 +1361,42 @@ var CustomConfirmModal = class _CustomConfirmModal extends import_obsidian3.Moda
 // spaceDashboardView.ts
 var import_obsidian4 = require("obsidian");
 var VIEW_TYPE_SPACE_DASHBOARD = "virtual-project-space-dashboard";
+var TodoModal = class extends import_obsidian4.Modal {
+  constructor(app, onSubmit) {
+    super(app);
+    this.text = "";
+    this.onSubmit = onSubmit;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "\u6DFB\u52A0\u5F85\u529E\u4EFB\u52A1" });
+    new import_obsidian4.Setting(contentEl).setName("\u4EFB\u52A1\u5185\u5BB9").addText(
+      (text) => text.setPlaceholder("\u8BF7\u8F93\u5165\u5F85\u529E\u4E8B\u9879\u5185\u5BB9").onChange((value) => {
+        this.text = value;
+      })
+    );
+    new import_obsidian4.Setting(contentEl).addButton(
+      (btn) => btn.setButtonText("\u6DFB\u52A0").setCta().onClick(() => {
+        if (this.text.trim()) {
+          this.onSubmit(this.text.trim());
+          this.close();
+        }
+      })
+    ).addButton(
+      (btn) => btn.setButtonText("\u53D6\u6D88").onClick(() => {
+        this.close();
+      })
+    );
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
 var SpaceDashboardView = class extends import_obsidian4.ItemView {
   constructor(leaf, spaceManager) {
     super(leaf);
     this.tasks = [];
-    this.expandedPaths = /* @__PURE__ */ new Set();
     this.currentRenderVersion = 0;
     this.hideCompleted = false;
     this.spaceManager = spaceManager;
@@ -1427,6 +1458,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     if (renderVersion !== this.currentRenderVersion) {
       return;
     }
+    this.hideCompleted = space.hideCompletedTasks || false;
     container.empty();
     const dashboardEl = container.createDiv({ cls: "vps-dashboard-container" });
     const banner = dashboardEl.createDiv({ cls: "vps-dashboard-banner" });
@@ -1470,27 +1502,6 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     rulesStat.createDiv({ cls: "vps-stat-value", text: String(rulesCount) });
     rulesStat.createDiv({ cls: "vps-stat-label", text: "\u5173\u8054\u89C4\u5219\u6570" });
     const grid = dashboardEl.createDiv({ cls: "vps-dashboard-grid" });
-    const filesCard = grid.createDiv({ cls: "vps-dashboard-card" });
-    const filesTitle = filesCard.createDiv({
-      cls: "vps-dashboard-card-title",
-      text: "\u{1F4C4} \u9879\u76EE\u6587\u4EF6"
-    });
-    const quickActions = filesTitle.createDiv({ cls: "vps-quick-actions" });
-    const addNoteBtn = quickActions.createEl("button", {
-      cls: "vps-btn vps-btn-secondary",
-      text: "\u65B0\u5EFA\u7B14\u8BB0"
-    });
-    addNoteBtn.style.setProperty("--space-color", space.color);
-    addNoteBtn.addEventListener("click", () => this.createNewSpaceNote(space));
-    const filesList = filesCard.createDiv();
-    filesList.style.cssText = "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;";
-    const allSpaceFiles = this.spaceManager.getSpaceFiles(space.id);
-    if (allSpaceFiles.length === 0) {
-      filesList.createDiv({ text: "\u5F53\u524D\u7A7A\u95F4\u65E0\u6587\u4EF6", cls: "vps-space-meta" });
-    } else {
-      const rootNode = this.buildVirtualTree(allSpaceFiles);
-      this.renderTreeNodes(filesList, rootNode, 0);
-    }
     const tasksCard = grid.createDiv({ cls: "vps-dashboard-card" });
     const tasksTitle = tasksCard.createDiv({
       cls: "vps-dashboard-card-title",
@@ -1506,12 +1517,54 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     });
     hideCompletedCheckbox.checked = this.hideCompleted;
     hideCompletedLabel.createSpan({ text: "\u9690\u85CF\u5DF2\u5B8C\u6210" });
-    hideCompletedCheckbox.addEventListener("change", () => {
+    hideCompletedCheckbox.addEventListener("change", async () => {
       this.hideCompleted = hideCompletedCheckbox.checked;
+      await this.spaceManager.updateSpace(space.id, { hideCompletedTasks: this.hideCompleted });
       this.render();
     });
     const tasksList = tasksCard.createDiv();
     tasksList.style.cssText = "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;";
+    tasksCard.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const menu = new import_obsidian4.Menu();
+      menu.addItem((item) => {
+        item.setTitle("\u6DFB\u52A0\u5F85\u529E\u4EFB\u52A1").setIcon("plus").onClick(() => {
+          new TodoModal(this.app, async (text) => {
+            const currentSpace = this.spaceManager.getSpace(this.spaceId);
+            if (currentSpace) {
+              if (!currentSpace.tasks)
+                currentSpace.tasks = [];
+              currentSpace.tasks.push({
+                id: Math.random().toString(36).substring(2, 11),
+                text,
+                completed: false
+              });
+              await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
+              this.render();
+            }
+          }).open();
+        });
+      });
+      const target = event.target;
+      const taskItemEl = target.closest(".vps-task-item");
+      if (taskItemEl) {
+        const taskId = taskItemEl.getAttribute("data-task-id");
+        if (taskId) {
+          menu.addSeparator();
+          menu.addItem((item) => {
+            item.setTitle("\u5220\u9664\u5F85\u529E\u4EFB\u52A1").setIcon("trash").onClick(async () => {
+              const currentSpace = this.spaceManager.getSpace(this.spaceId);
+              if (currentSpace && currentSpace.tasks) {
+                currentSpace.tasks = currentSpace.tasks.filter((t) => t.id !== taskId);
+                await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
+                this.render();
+              }
+            });
+          });
+        }
+      }
+      menu.showAtPosition({ x: event.clientX, y: event.clientY });
+    });
     const displayedTasks = this.hideCompleted ? this.tasks.filter((t) => !t.completed) : this.tasks;
     if (displayedTasks.length === 0) {
       tasksList.createDiv({
@@ -1519,10 +1572,13 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         cls: "vps-space-meta"
       });
     } else {
-      displayedTasks.forEach((task, idx) => {
+      displayedTasks.forEach((task) => {
         const taskRow = tasksList.createDiv({
           cls: `vps-task-item ${task.completed ? "is-completed" : ""}`
         });
+        if (task.customTaskId) {
+          taskRow.setAttribute("data-task-id", task.customTaskId);
+        }
         const checkbox = taskRow.createEl("input", {
           cls: "vps-task-checkbox",
           type: "checkbox"
@@ -1543,7 +1599,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         });
         taskRow.createDiv({
           cls: "vps-task-source",
-          text: task.file.basename
+          text: task.file ? task.file.basename : "\u6570\u636E"
         });
       });
     }
@@ -1571,9 +1627,32 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         }
       });
     }
+    if (space.tasks) {
+      space.tasks.forEach((customTask) => {
+        this.tasks.push({
+          text: customTask.text,
+          completed: customTask.completed,
+          customTaskId: customTask.id
+        });
+      });
+    }
   }
   async toggleTaskCompletion(task) {
+    if (task.customTaskId) {
+      const space = this.spaceManager.getSpace(this.spaceId);
+      if (space && space.tasks) {
+        const customTask = space.tasks.find((t) => t.id === task.customTaskId);
+        if (customTask) {
+          customTask.completed = !task.completed;
+          task.completed = customTask.completed;
+          await this.spaceManager.updateSpace(space.id, { tasks: space.tasks });
+        }
+      }
+      return;
+    }
     const file = task.file;
+    if (!file || task.lineIndex === void 0)
+      return;
     const content = await this.app.vault.read(file);
     const lines = content.split("\n");
     if (lines[task.lineIndex] !== void 0 && lines[task.lineIndex].includes(task.text)) {
@@ -1588,122 +1667,6 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       task.completed = newCompletedState;
       task.rawLine = updatedLine;
     }
-  }
-  async createNewSpaceNote(space) {
-    const timestamp = Date.now();
-    let noteName = `_temp_${timestamp}_\u672A\u547D\u540D\u7B14\u8BB0`;
-    let fullPath = (0, import_obsidian4.normalizePath)(`${noteName}.md`);
-    let counter = 1;
-    while (this.app.vault.getAbstractFileByPath(fullPath)) {
-      noteName = `_temp_${timestamp}_\u672A\u547D\u540D\u7B14\u8BB0 (${counter})`;
-      fullPath = (0, import_obsidian4.normalizePath)(`${noteName}.md`);
-      counter++;
-    }
-    const templateContent = `---
-space: "${space.name}"
-tags:
-  - "temp-note"
----
-
-> [!NOTE]
-> \u8FD9\u662F\u4E34\u65F6\u7B14\u8BB0\u3002\u8BF7\u6309 **Ctrl+Shift+S**\uFF08\u6216 Cmd+Shift+S\uFF09\u4FDD\u5B58\u5E76\u9009\u62E9\u76EE\u6807\u6587\u4EF6\u5939\u3002
-
-
-`;
-    const managerAny = this.spaceManager;
-    if (!managerAny.tempNoteSpaceMap) {
-      managerAny.tempNoteSpaceMap = {};
-    }
-    managerAny.tempNoteSpaceMap[fullPath] = space.id;
-    const newFile = await this.app.vault.create(fullPath, templateContent);
-    this.app.workspace.getLeaf(false).openFile(newFile);
-    this.render();
-    new import_obsidian4.Notice(
-      "\u5DF2\u521B\u5EFA\u4E34\u65F6\u7B14\u8BB0\uFF0C\u8BF7\u7F16\u8F91\u540E\u6309\u4E0B Ctrl+Shift+S \u9009\u62E9\u76EE\u6807\u6587\u4EF6\u5939\u4FDD\u5B58\u3002"
-    );
-  }
-  buildVirtualTree(files) {
-    const root = {
-      name: "root",
-      path: "",
-      isFolder: true,
-      children: /* @__PURE__ */ new Map()
-    };
-    files.forEach((file) => {
-      const parts = file.path.split("/");
-      let current = root;
-      for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-        const isLast = i === parts.length - 1;
-        const currentPath = parts.slice(0, i + 1).join("/");
-        if (isLast) {
-          current.children.set(part, {
-            name: part,
-            path: currentPath,
-            isFolder: false,
-            children: /* @__PURE__ */ new Map(),
-            file
-          });
-        } else {
-          if (!current.children.has(part)) {
-            current.children.set(part, {
-              name: part,
-              path: currentPath,
-              isFolder: true,
-              children: /* @__PURE__ */ new Map()
-            });
-          }
-          current = current.children.get(part);
-        }
-      }
-    });
-    return root;
-  }
-  renderTreeNodes(parentEl, node, depth) {
-    const sortedKeys = Array.from(node.children.keys()).sort((a, b) => {
-      const nodeA = node.children.get(a);
-      const nodeB = node.children.get(b);
-      if (nodeA.isFolder && !nodeB.isFolder)
-        return -1;
-      if (!nodeA.isFolder && nodeB.isFolder)
-        return 1;
-      return a.localeCompare(b);
-    });
-    sortedKeys.forEach((key) => {
-      const childNode = node.children.get(key);
-      const isExpanded = this.expandedPaths.has(childNode.path);
-      const nodeEl = parentEl.createDiv({
-        cls: `vps-tree-node vps-tree-node-depth-${depth}`
-      });
-      const iconEl = nodeEl.createDiv({ cls: "vps-tree-node-icon" });
-      (0, import_obsidian4.setIcon)(
-        iconEl,
-        childNode.isFolder ? isExpanded ? "chevron-down" : "chevron-right" : "file-text"
-      );
-      nodeEl.createDiv({ cls: "vps-tree-node-name", text: childNode.name });
-      if (childNode.isFolder) {
-        nodeEl.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (this.expandedPaths.has(childNode.path)) {
-            this.expandedPaths.delete(childNode.path);
-          } else {
-            this.expandedPaths.add(childNode.path);
-          }
-          this.render();
-        });
-        if (isExpanded) {
-          const childrenContainer = parentEl.createDiv();
-          this.renderTreeNodes(childrenContainer, childNode, depth + 1);
-        }
-      } else {
-        nodeEl.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (childNode.file) {
-            this.app.workspace.getLeaf(false).openFile(childNode.file);
-          }
-        });
-      }
-    });
   }
   // Helper to adjust color brightness
   adjustColorBrightness(hex, percent) {
