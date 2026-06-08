@@ -64,6 +64,8 @@ export class SpaceDashboardView extends ItemView {
     const targetId = activeSpaceId || this.spaceId;
     this.spaceId = targetId;
 
+    (this.leaf as any).updateHeader();
+
     const renderVersion = ++this.currentRenderVersion;
     const container = this.contentEl;
 

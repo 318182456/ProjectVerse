@@ -655,6 +655,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
     const targetId = activeSpaceId || this.spaceId;
     this.spaceId = targetId;
+    this.leaf.updateHeader();
     const renderVersion = ++this.currentRenderVersion;
     const container = this.contentEl;
     if (!targetId) {
