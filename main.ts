@@ -1,9 +1,10 @@
-import { Plugin, WorkspaceLeaf, TFile, TFolder, TAbstractFile } from 'obsidian';
+import { Plugin, WorkspaceLeaf, TFile, TFolder, TAbstractFile, Notice, normalizePath } from 'obsidian';
 import { SpaceManager } from './spaceManager';
 import { VIEW_TYPE_SPACE_EXPLORER, SpaceExplorerView } from './spaceExplorerView';
 import { VIEW_TYPE_SPACE_DASHBOARD, SpaceDashboardView } from './spaceDashboardView';
 import { PluginSettings, DEFAULT_SETTINGS } from './types';
 import { SpaceModal } from './spaceModal';
+import { SaveNoteModal } from './saveNoteModal';
 
 export default class VirtualProjectSpacePlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
@@ -171,6 +172,17 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         }
       }
     });
+
+    // Intercept Ctrl+S / Cmd+S to save temporary notes
+    this.registerDomEvent(window, 'keydown', (evt: KeyboardEvent) => {
+      if ((evt.ctrlKey || evt.metaKey) && evt.key === 's') {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile && activeFile.name.startsWith('_temp_')) {
+          evt.preventDefault();
+          this.promptSaveTempNote(activeFile);
+        }
+      }
+    });
   }
 
   async onunload() {
@@ -318,5 +330,51 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         leaf.view.render();
       }
     });
+  }
+
+  async promptSaveTempNote(file: TFile) {
+    let defaultFolder = '/';
+    if (this.settings.activeSpaceId) {
+      const space = this.spaceManager.getSpace(this.settings.activeSpaceId);
+      if (space && space.folders.length > 0) {
+        defaultFolder = space.folders[0];
+      }
+    }
+
+    new SaveNoteModal(this.app, file, defaultFolder, async (newName, folderPath) => {
+      let cleanFolder = folderPath === '/' ? '' : folderPath;
+      if (cleanFolder.endsWith('/')) {
+        cleanFolder = cleanFolder.substring(0, cleanFolder.length - 1);
+      }
+      
+      const destPath = normalizePath(`${cleanFolder}/${newName}.md`);
+      
+      if (this.app.vault.getAbstractFileByPath(destPath)) {
+        new Notice(`文件已存在: ${destPath}`);
+        return;
+      }
+
+      try {
+        await this.app.fileManager.renameFile(file, destPath);
+        new Notice(`笔记已保存至: ${destPath}`);
+        
+        if (this.settings.activeSpaceId) {
+          const space = this.spaceManager.getSpace(this.settings.activeSpaceId);
+          if (space) {
+            const isSubfolder = space.folders.some(f => 
+              destPath.startsWith(f === '/' ? '' : f + '/')
+            );
+            if (!isSubfolder) {
+              await this.spaceManager.addFileToSpace(space.id, destPath);
+            }
+          }
+        }
+        
+        this.updateViews();
+      } catch (e) {
+        console.error("Failed to save temp note", e);
+        new Notice("保存失败，请检查路径是否正确。");
+      }
+    }).open();
   }
 }

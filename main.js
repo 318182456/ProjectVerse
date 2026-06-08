@@ -28,7 +28,7 @@ __export(main_exports, {
   default: () => VirtualProjectSpacePlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // spaceManager.ts
 var import_obsidian = require("obsidian");
@@ -820,31 +820,29 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     }
   }
   async createNewSpaceNote(space) {
-    let folderPath = "/";
-    if (space.folders.length > 0) {
-      folderPath = space.folders[0];
-    }
-    let noteName = "\u672A\u547D\u540D\u7B14\u8BB0";
-    let fullPath = (0, import_obsidian4.normalizePath)(`${folderPath === "/" ? "" : folderPath + "/"}${noteName}.md`);
+    const timestamp = Date.now();
+    let noteName = `_temp_${timestamp}_\u672A\u547D\u540D\u7B14\u8BB0`;
+    let fullPath = (0, import_obsidian4.normalizePath)(`${noteName}.md`);
     let counter = 1;
     while (this.app.vault.getAbstractFileByPath(fullPath)) {
-      noteName = `\u672A\u547D\u540D\u7B14\u8BB0 (${counter})`;
-      fullPath = (0, import_obsidian4.normalizePath)(`${folderPath === "/" ? "" : folderPath + "/"}${noteName}.md`);
+      noteName = `_temp_${timestamp}_\u672A\u547D\u540D\u7B14\u8BB0 (${counter})`;
+      fullPath = (0, import_obsidian4.normalizePath)(`${noteName}.md`);
       counter++;
     }
-    const templateContent = `# ${noteName}
+    const templateContent = `# \u672A\u547D\u540D\u7B14\u8BB0
 
 \u521B\u5EFA\u4E8E\u9879\u76EE\u7A7A\u95F4: ${space.name}
 
 ## \u4EFB\u52A1
 - [ ] \u5F00\u59CB\u7F16\u5199\u7B14\u8BB0...
+
+> [!NOTE]
+> \u8FD9\u662F\u4E34\u65F6\u7B14\u8BB0\u3002\u8BF7\u6309 **Ctrl+S**\uFF08\u6216 Cmd+S\uFF09\u4FDD\u5B58\u5E76\u9009\u62E9\u76EE\u6807\u6587\u4EF6\u5939\u3002
 `;
     const newFile = await this.app.vault.create(fullPath, templateContent);
-    if (folderPath === "/") {
-      await this.spaceManager.addFileToSpace(space.id, newFile.path);
-    }
     this.app.workspace.getLeaf(false).openFile(newFile);
     this.render();
+    new import_obsidian4.Notice("\u5DF2\u521B\u5EFA\u4E34\u65F6\u7B14\u8BB0\uFF0C\u8BF7\u7F16\u8F91\u540E\u6309\u4E0B Ctrl+S \u9009\u62E9\u76EE\u6807\u6587\u4EF6\u5939\u4FDD\u5B58\u3002");
   }
   buildVirtualTree(files) {
     const root = {
@@ -957,8 +955,84 @@ var DEFAULT_SETTINGS = {
   spaces: []
 };
 
+// saveNoteModal.ts
+var import_obsidian6 = require("obsidian");
+
+// folderSuggestModal.ts
+var import_obsidian5 = require("obsidian");
+var FolderSuggestModal = class extends import_obsidian5.FuzzySuggestModal {
+  constructor(app, onSubmit) {
+    super(app);
+    this.onSubmit = onSubmit;
+  }
+  getItems() {
+    const folders = [];
+    const files = this.app.vault.getAllLoadedFiles();
+    files.forEach((f) => {
+      if (f instanceof import_obsidian5.TFolder) {
+        folders.push(f);
+      }
+    });
+    folders.push(this.app.vault.getRoot());
+    return folders;
+  }
+  getItemText(folder) {
+    return folder.path === "/" ? "/" : folder.path;
+  }
+  onChooseItem(folder, evt) {
+    this.onSubmit(folder);
+  }
+};
+
+// saveNoteModal.ts
+var SaveNoteModal = class extends import_obsidian6.Modal {
+  constructor(app, file, defaultFolderPath, onSave) {
+    super(app);
+    this.file = file;
+    this.fileName = file.basename.startsWith("_temp_") ? file.basename.replace(/^_temp_(_\d+)?_/, "") : file.basename;
+    this.folderPath = defaultFolderPath;
+    this.onSave = onSave;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: "\u4FDD\u5B58\u4E34\u65F6\u7B14\u8BB0" });
+    let fileNameSetting = new import_obsidian6.Setting(contentEl).setName("\u6587\u4EF6\u540D").setDesc("\u8BF7\u8F93\u5165\u7B14\u8BB0\u6587\u4EF6\u540D").addText((text) => text.setValue(this.fileName).onChange((value) => {
+      this.fileName = value;
+    }));
+    let folderSetting = new import_obsidian6.Setting(contentEl).setName("\u4FDD\u5B58\u6587\u4EF6\u5939").setDesc("\u9009\u62E9\u7B14\u8BB0\u8981\u4FDD\u5B58\u7684\u6587\u4EF6\u5939\u8DEF\u5F84").addText((text) => {
+      text.setValue(this.folderPath);
+      text.onChange((value) => {
+        this.folderPath = value;
+      });
+      text.inputEl.style.width = "180px";
+    }).addButton(
+      (btn) => btn.setButtonText("\u6D4F\u89C8...").onClick(() => {
+        new FolderSuggestModal(this.app, (folder) => {
+          this.folderPath = folder.path;
+          const input = folderSetting.controlEl.querySelector("input");
+          if (input) {
+            input.value = folder.path;
+          }
+        }).open();
+      })
+    );
+    new import_obsidian6.Setting(contentEl).addButton((btn) => btn.setButtonText("\u4FDD\u5B58").setCta().onClick(async () => {
+      if (!this.fileName.trim()) {
+        new import_obsidian6.Notice("\u6587\u4EF6\u540D\u4E0D\u80FD\u4E3A\u7A7A\uFF01");
+        return;
+      }
+      await this.onSave(this.fileName, this.folderPath);
+      this.close();
+    })).addButton((btn) => btn.setButtonText("\u53D6\u6D88").onClick(() => this.close()));
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
 // main.ts
-var VirtualProjectSpacePlugin = class extends import_obsidian5.Plugin {
+var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -986,7 +1060,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian5.Plugin {
     });
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
-        if (!(file instanceof import_obsidian5.TFile) && !(file instanceof import_obsidian5.TFolder))
+        if (!(file instanceof import_obsidian7.TFile) && !(file instanceof import_obsidian7.TFolder))
           return;
         menu.addSeparator();
         menu.addItem((item) => {
@@ -995,9 +1069,9 @@ var VirtualProjectSpacePlugin = class extends import_obsidian5.Plugin {
           this.settings.spaces.forEach((space) => {
             subMenu.addItem((subItem) => {
               subItem.setTitle(space.name).onClick(async () => {
-                if (file instanceof import_obsidian5.TFile) {
+                if (file instanceof import_obsidian7.TFile) {
                   await this.spaceManager.addFileToSpace(space.id, file.path);
-                } else if (file instanceof import_obsidian5.TFolder) {
+                } else if (file instanceof import_obsidian7.TFolder) {
                   await this.spaceManager.addFolderToSpace(space.id, file.path);
                 }
               });
@@ -1008,9 +1082,9 @@ var VirtualProjectSpacePlugin = class extends import_obsidian5.Plugin {
             subItem.setTitle("+ \u65B0\u5EFA\u7A7A\u95F4\u5E76\u6DFB\u52A0").onClick(() => {
               new SpaceModal(this.app, async (name, icon, color) => {
                 const newSpace = await this.spaceManager.createSpace(name, icon, color);
-                if (file instanceof import_obsidian5.TFile) {
+                if (file instanceof import_obsidian7.TFile) {
                   await this.spaceManager.addFileToSpace(newSpace.id, file.path);
-                } else if (file instanceof import_obsidian5.TFolder) {
+                } else if (file instanceof import_obsidian7.TFolder) {
                   await this.spaceManager.addFolderToSpace(newSpace.id, file.path);
                 }
                 this.activateSpace(newSpace.id);
@@ -1094,6 +1168,15 @@ ${names}`);
         }
       }
     });
+    this.registerDomEvent(window, "keydown", (evt) => {
+      if ((evt.ctrlKey || evt.metaKey) && evt.key === "s") {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile && activeFile.name.startsWith("_temp_")) {
+          evt.preventDefault();
+          this.promptSaveTempNote(activeFile);
+        }
+      }
+    });
   }
   async onunload() {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_EXPLORER);
@@ -1136,7 +1219,7 @@ ${names}`);
         const openTabs = [];
         this.app.workspace.iterateAllLeaves((leaf) => {
           const file = leaf.view.file;
-          if (file instanceof import_obsidian5.TFile) {
+          if (file instanceof import_obsidian7.TFile) {
             openTabs.push(file.path);
           }
         });
@@ -1162,7 +1245,7 @@ ${names}`);
         });
         for (const filePath of newSpace.workspace.openTabs) {
           const file = this.app.vault.getAbstractFileByPath(filePath);
-          if (file instanceof import_obsidian5.TFile) {
+          if (file instanceof import_obsidian7.TFile) {
             await this.app.workspace.getLeaf("tab").openFile(file);
           }
         }
@@ -1213,5 +1296,44 @@ ${names}`);
         leaf.view.render();
       }
     });
+  }
+  async promptSaveTempNote(file) {
+    let defaultFolder = "/";
+    if (this.settings.activeSpaceId) {
+      const space = this.spaceManager.getSpace(this.settings.activeSpaceId);
+      if (space && space.folders.length > 0) {
+        defaultFolder = space.folders[0];
+      }
+    }
+    new SaveNoteModal(this.app, file, defaultFolder, async (newName, folderPath) => {
+      let cleanFolder = folderPath === "/" ? "" : folderPath;
+      if (cleanFolder.endsWith("/")) {
+        cleanFolder = cleanFolder.substring(0, cleanFolder.length - 1);
+      }
+      const destPath = (0, import_obsidian7.normalizePath)(`${cleanFolder}/${newName}.md`);
+      if (this.app.vault.getAbstractFileByPath(destPath)) {
+        new import_obsidian7.Notice(`\u6587\u4EF6\u5DF2\u5B58\u5728: ${destPath}`);
+        return;
+      }
+      try {
+        await this.app.fileManager.renameFile(file, destPath);
+        new import_obsidian7.Notice(`\u7B14\u8BB0\u5DF2\u4FDD\u5B58\u81F3: ${destPath}`);
+        if (this.settings.activeSpaceId) {
+          const space = this.spaceManager.getSpace(this.settings.activeSpaceId);
+          if (space) {
+            const isSubfolder = space.folders.some(
+              (f) => destPath.startsWith(f === "/" ? "" : f + "/")
+            );
+            if (!isSubfolder) {
+              await this.spaceManager.addFileToSpace(space.id, destPath);
+            }
+          }
+        }
+        this.updateViews();
+      } catch (e) {
+        console.error("Failed to save temp note", e);
+        new import_obsidian7.Notice("\u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u8DEF\u5F84\u662F\u5426\u6B63\u786E\u3002");
+      }
+    }).open();
   }
 };

@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, setIcon, TFile, normalizePath } from 'obsidian';
+import { ItemView, WorkspaceLeaf, setIcon, TFile, normalizePath, Notice } from 'obsidian';
 import { SpaceManager } from './spaceManager';
 import { ProjectSpace } from './types';
 
@@ -279,33 +279,25 @@ export class SpaceDashboardView extends ItemView {
   }
 
   private async createNewSpaceNote(space: ProjectSpace) {
-    let folderPath = '/';
-    if (space.folders.length > 0) {
-      folderPath = space.folders[0];
-    }
+    const timestamp = Date.now();
+    let noteName = `_temp_${timestamp}_未命名笔记`;
+    let fullPath = normalizePath(`${noteName}.md`);
     
-    let noteName = '未命名笔记';
-    let fullPath = normalizePath(`${folderPath === '/' ? '' : folderPath + '/'}${noteName}.md`);
-    
-    // Make sure path is unique
     let counter = 1;
     while (this.app.vault.getAbstractFileByPath(fullPath)) {
-      noteName = `未命名笔记 (${counter})`;
-      fullPath = normalizePath(`${folderPath === '/' ? '' : folderPath + '/'}${noteName}.md`);
+      noteName = `_temp_${timestamp}_未命名笔记 (${counter})`;
+      fullPath = normalizePath(`${noteName}.md`);
       counter++;
     }
 
-    const templateContent = `# ${noteName}\n\n创建于项目空间: ${space.name}\n\n## 任务\n- [ ] 开始编写笔记...\n`;
+    const templateContent = `# 未命名笔记\n\n创建于项目空间: ${space.name}\n\n## 任务\n- [ ] 开始编写笔记...\n\n> [!NOTE]\n> 这是临时笔记。请按 **Ctrl+S**（或 Cmd+S）保存并选择目标文件夹。\n`;
     const newFile = await this.app.vault.create(fullPath, templateContent);
-    
-    // Explicitly associate with the space if it's not matching folder
-    if (folderPath === '/') {
-      await this.spaceManager.addFileToSpace(space.id, newFile.path);
-    }
     
     // Open the new file
     this.app.workspace.getLeaf(false).openFile(newFile);
     this.render();
+    
+    new Notice('已创建临时笔记，请编辑后按下 Ctrl+S 选择目标文件夹保存。');
   }
 
   private buildVirtualTree(files: TFile[]): VirtualNode {
