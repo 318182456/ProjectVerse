@@ -245,7 +245,7 @@ var SpaceManager = class {
             const frontmatter = cache.frontmatter;
             if (frontmatter) {
               const spaceName = frontmatter.space || frontmatter.projectSpace;
-              if (spaceName && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
+              if (spaceName && (typeof spaceName === "string" || typeof spaceName === "number") && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
                 matchedFiles.add(file);
               }
             }
@@ -373,7 +373,7 @@ var SpaceModal = class extends import_obsidian2.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: this.space ? "\u7F16\u8F91\u9879\u76EE\u7A7A\u95F4" : "\u65B0\u5EFA\u9879\u76EE\u7A7A\u95F4" });
-    new import_obsidian2.Setting(contentEl).setName("\u7A7A\u95F4\u540D\u79F0").setDesc("\u4E3A\u60A8\u7684\u903B\u8F91\u9879\u76EE\u7A7A\u95F4\u547D\u540D").addText((text) => text.setValue(this.name).setPlaceholder("\u4F8B\u5982: Frontend Project").onChange((value) => {
+    new import_obsidian2.Setting(contentEl).setName("\u7A7A\u95F4\u540D\u79F0").setDesc("\u4E3A\u60A8\u7684\u903B\u8F91\u9879\u76EE\u7A7A\u95F4\u547D\u540D").addText((text) => text.setValue(this.name).setPlaceholder("\u4F8B\u5982: Frontend project").onChange((value) => {
       this.name = value;
     }));
     const icons = [
@@ -2205,7 +2205,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       VIEW_TYPE_SPACE_DASHBOARD,
       (leaf) => new SpaceDashboardView(leaf, this.spaceManager)
     );
-    this.addRibbonIcon("layers", "\u{1F5C2}\uFE0F \u9879\u76EE\u7A7A\u95F4 Explorer", () => {
+    this.addRibbonIcon("layers", "\u{1F5C2}\uFE0F \u9879\u76EE\u7A7A\u95F4 explorer", () => {
       void this.activateExplorerView();
     });
     this.registerEvent(
@@ -2295,7 +2295,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
     );
     this.addCommand({
       id: "create-space",
-      name: "\u65B0\u5EFA\u9879\u76EE\u7A7A\u95F4 (Create Space)",
+      name: "\u65B0\u5EFA\u9879\u76EE\u7A7A\u95F4 (create space)",
       callback: () => {
         new SpaceModal(this.app, (name, icon, color) => {
           void (async () => {
@@ -2307,7 +2307,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
     });
     this.addCommand({
       id: "switch-space",
-      name: "\u5207\u6362\u9879\u76EE\u7A7A\u95F4 (Switch Space)",
+      name: "\u5207\u6362\u9879\u76EE\u7A7A\u95F4 (switch space)",
       callback: () => {
         const spaces = this.spaceManager.getSpaces();
         if (spaces.length === 0) {
@@ -2321,7 +2321,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
     });
     this.addCommand({
       id: "open-active-dashboard",
-      name: "\u6253\u5F00\u5F53\u524D\u7A7A\u95F4\u63A7\u5236\u9762\u677F (Open Dashboard)",
+      name: "\u6253\u5F00\u5F53\u524D\u7A7A\u95F4\u63A7\u5236\u9762\u677F (open dashboard)",
       callback: () => {
         if (this.settings.activeSpaceId) {
           void this.openDashboard(this.settings.activeSpaceId);

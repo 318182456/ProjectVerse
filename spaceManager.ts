@@ -252,7 +252,7 @@ export class SpaceManager {
             const frontmatter = cache.frontmatter as Record<string, unknown>;
             if (frontmatter) {
               const spaceName = frontmatter.space || frontmatter.projectSpace;
-              if (spaceName && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
+              if (spaceName && (typeof spaceName === 'string' || typeof spaceName === 'number') && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
                 matchedFiles.add(file);
               }
             }

@@ -32,7 +32,7 @@ export class SpaceModal extends Modal {
       .setDesc('为您的逻辑项目空间命名')
       .addText(text => text
         .setValue(this.name)
-        .setPlaceholder('例如: Frontend Project')
+        .setPlaceholder('例如: Frontend project')
         .onChange(value => {
           this.name = value;
         }));

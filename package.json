@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit && node esbuild.config.mjs production",
-    "deploy": "npm run build && node deploy.mjs"
+    "deploy": "npm run build && node deploy.mjs",
+    "lint": "npx eslint ."
   },
   "keywords": [
     "obsidian",
@@ -18,9 +19,13 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.8.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
     "esbuild": "0.19.11",
+    "eslint": "^9.39.4",
+    "eslint-plugin-obsidianmd": "^0.3.0",
     "obsidian": "^1.5.8",
-    "typescript": "^5.3.3",
-    "tslib": "^2.6.2"
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3"
   }
 }

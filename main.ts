@@ -46,7 +46,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     );
 
     // Ribbon Icon
-    this.addRibbonIcon('layers', '🗂️ 项目空间 Explorer', () => {
+    this.addRibbonIcon('layers', '🗂️ 项目空间 explorer', () => {
       void this.activateExplorerView();
     });
 
@@ -157,7 +157,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     // Commands
     this.addCommand({
       id: 'create-space',
-      name: '新建项目空间 (Create Space)',
+      name: '新建项目空间 (create space)',
       callback: () => {
         new SpaceModal(this.app, (name, icon, color) => {
           void (async () => {
@@ -170,7 +170,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
     this.addCommand({
       id: 'switch-space',
-      name: '切换项目空间 (Switch Space)',
+      name: '切换项目空间 (switch space)',
       callback: () => {
         const spaces = this.spaceManager.getSpaces();
         if (spaces.length === 0) {
@@ -186,7 +186,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
     this.addCommand({
       id: 'open-active-dashboard',
-      name: '打开当前空间控制面板 (Open Dashboard)',
+      name: '打开当前空间控制面板 (open dashboard)',
       callback: () => {
         if (this.settings.activeSpaceId) {
           void this.openDashboard(this.settings.activeSpaceId);
@@ -495,7 +495,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       } else {
         // If the space has no folders configured, check if a folder with the same name as the space exists in the vault.
         // Try exact match first, then case-insensitive.
-        const folders = this.app.vault.getAllLoadedFiles().filter(f => f instanceof TFolder) as TFolder[];
+        const folders = this.app.vault.getAllLoadedFiles().filter((f): f is TFolder => f instanceof TFolder);
         const matchingFolder = folders.find(f => f.name === activeSpace.name) || 
                                folders.find(f => f.name.toLowerCase() === activeSpace.name.toLowerCase());
         if (matchingFolder) {
