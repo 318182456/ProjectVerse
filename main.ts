@@ -6,9 +6,21 @@ import { PluginSettings, DEFAULT_SETTINGS } from './types';
 import { SpaceModal } from './spaceModal';
 import { SaveNoteModal } from './saveNoteModal';
 
+function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
+  let timeout: any = null;
+  return function(this: any, ...args: Parameters<T>) {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
 export default class VirtualProjectSpacePlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
   spaceManager!: SpaceManager;
+  private isSavePending = false;
+  private debouncedSave = debounce(async () => {
+    await this.performSave();
+  }, 1000);
 
   async onload() {
     await this.loadPluginSettings();
@@ -204,44 +216,141 @@ export default class VirtualProjectSpacePlugin extends Plugin {
   }
 
   async onunload() {
+    if (this.isSavePending) {
+      await this.performSave();
+    }
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_EXPLORER);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_DASHBOARD);
   }
 
   async loadPluginSettings() {
-    const pluginDir = this.manifest.dir || '.obsidian/plugins/projectVerse';
-    const dataPath = `${pluginDir}/spaces.json`;
-    let loadedData: any = null;
+    const CONFIG_DIR = this.manifest.dir || '.obsidian/plugins/projectVerse';
+    const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
+    const SPACES_DIR = `${CONFIG_DIR}/spaces`;
+    const adapter = this.app.vault.adapter;
+
+    let loadedSettings: any = null;
+    const spaces: any[] = [];
+    let migrationNeeded = false;
 
     try {
-      if (await this.app.vault.adapter.exists(dataPath)) {
-        const content = await this.app.vault.adapter.read(dataPath);
-        loadedData = JSON.parse(content);
+      if (await adapter.exists(SETTINGS_PATH)) {
+        const settingsContent = await adapter.read(SETTINGS_PATH);
+        loadedSettings = JSON.parse(settingsContent);
+
+        if (await adapter.exists(SPACES_DIR)) {
+          const filesList = await adapter.list(SPACES_DIR);
+          for (const filePath of filesList.files) {
+            if (filePath.endsWith('.json')) {
+              try {
+                const spaceContent = await adapter.read(filePath);
+                const spaceObj = JSON.parse(spaceContent);
+                if (spaceObj && spaceObj.id) {
+                  spaces.push(spaceObj);
+                }
+              } catch (err) {
+                console.error(`Failed to load space file: ${filePath}`, err);
+              }
+            }
+          }
+        }
+        
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
+        this.settings.spaces = spaces;
       } else {
-        // Fallback to standard data.json
-        loadedData = await this.loadData();
+        const oldPluginDir = this.manifest.dir || '.obsidian/plugins/projectVerse';
+        const oldDataPath = `${oldPluginDir}/spaces.json`;
+        let oldData: any = null;
+
+        if (await adapter.exists(oldDataPath)) {
+          try {
+            const content = await adapter.read(oldDataPath);
+            oldData = JSON.parse(content);
+            migrationNeeded = true;
+          } catch (e) {
+            console.warn("Failed to read old spaces.json", e);
+          }
+        } else {
+          const standardData = await this.loadData();
+          if (standardData && (standardData.spaces || standardData.activeSpaceId)) {
+            oldData = standardData;
+            migrationNeeded = true;
+          }
+        }
+
+        if (oldData) {
+          this.settings = Object.assign({}, DEFAULT_SETTINGS, oldData);
+          if (migrationNeeded) {
+            this.isSavePending = true;
+            await this.performSave();
+            
+            if (await adapter.exists(oldDataPath)) {
+              try {
+                await adapter.rename(oldDataPath, `${oldDataPath}.bak`);
+              } catch (e) {
+                console.warn("Failed to rename old spaces.json to .bak", e);
+              }
+            }
+          }
+        } else {
+          this.settings = Object.assign({}, DEFAULT_SETTINGS);
+        }
       }
     } catch (e) {
-      console.warn("Failed to load spaces.json, falling back to empty settings", e);
+      console.error("Failed to load plugin settings", e);
+      this.settings = Object.assign({}, DEFAULT_SETTINGS);
     }
-
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
   }
 
   async savePluginSettings() {
-    // Save to the custom path requested
-    const pluginDir = this.manifest.dir || '.obsidian/plugins/projectVerse';
-    const dataPath = `${pluginDir}/spaces.json`;
+    this.isSavePending = true;
+    this.debouncedSave();
+  }
+
+  async performSave() {
+    if (!this.isSavePending) return;
+    this.isSavePending = false;
+
+    const CONFIG_DIR = this.manifest.dir || '.obsidian/plugins/projectVerse';
+    const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
+    const SPACES_DIR = `${CONFIG_DIR}/spaces`;
+    const adapter = this.app.vault.adapter;
+
     try {
-      // Ensure plugin folder exists
-      if (!(await this.app.vault.adapter.exists(pluginDir))) {
-        await this.app.vault.adapter.mkdir(pluginDir);
+      if (!(await adapter.exists(CONFIG_DIR))) {
+        await adapter.mkdir(CONFIG_DIR);
       }
-      await this.app.vault.adapter.write(dataPath, JSON.stringify(this.settings, null, 2));
+      if (!(await adapter.exists(SPACES_DIR))) {
+        await adapter.mkdir(SPACES_DIR);
+      }
+
+      const { spaces, ...globalSettings } = this.settings;
+      await adapter.write(SETTINGS_PATH, JSON.stringify(globalSettings, null, 2));
+
+      const currentSpaceIds = new Set<string>();
+      for (const space of this.settings.spaces) {
+        currentSpaceIds.add(space.id);
+        const spacePath = `${SPACES_DIR}/${space.id}.json`;
+        await adapter.write(spacePath, JSON.stringify(space, null, 2));
+      }
+
+      try {
+        const filesList = await adapter.list(SPACES_DIR);
+        for (const filePath of filesList.files) {
+          const fileName = filePath.split('/').pop() || '';
+          if (fileName.endsWith('.json')) {
+            const spaceId = fileName.slice(0, -5);
+            if (!currentSpaceIds.has(spaceId)) {
+              await adapter.remove(filePath);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to clean up deleted space files", e);
+      }
     } catch (e) {
-      console.error("Failed to write to spaces.json", e);
+      console.error("Failed to perform save settings", e);
     }
-    await this.saveData(this.settings);
   }
 
   async activateSpace(spaceId: string) {
