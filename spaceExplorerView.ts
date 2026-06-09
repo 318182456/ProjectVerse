@@ -342,7 +342,7 @@ export class SpaceExplorerView extends ItemView {
             if (choice === "delete") {
               const file = this.app.vault.getAbstractFileByPath(this.selectedPath);
               if (file instanceof TFile) {
-                await this.app.vault.delete(file);
+                await this.app.fileManager.trashFile(file);
                 this.selectedPath = null;
                 this.render();
               }
@@ -460,9 +460,8 @@ export class SpaceExplorerView extends ItemView {
         if (files.length === 0 && folders.length === 0) {
           const d = treeContainer.createDiv({ 
             text: '该空间暂无关联文件。右键文件列表选择 "Add to Space" 加入。',
-            cls: 'vps-space-meta'
+            cls: 'vps-space-meta vps-space-meta-padding'
           });
-          d.style.cssText = 'padding: 8px;';
         } else {
           const rootNode = this.buildVirtualTree(files, folders);
           this.renderTreeNodes(treeContainer, rootNode, 0, activeSpaceId);
@@ -746,7 +745,7 @@ export class SpaceExplorerView extends ItemView {
                         folders: space.folders
                       });
                     }
-                    await this.app.vault.delete(folder, true);
+                    await this.app.fileManager.trashFile(folder);
                     if (this.selectedPath === childNode.path) {
                       this.selectedPath = null;
                     }
@@ -842,7 +841,7 @@ export class SpaceExplorerView extends ItemView {
                 ], false);
                 if (confirmDelete) {
                   if (childNode.file) {
-                    await this.app.vault.delete(childNode.file);
+                    await this.app.fileManager.trashFile(childNode.file);
                     if (this.selectedPath === childNode.path) {
                       this.selectedPath = null;
                     }

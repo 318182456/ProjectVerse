@@ -59,16 +59,6 @@ export class SpaceModal extends Modal {
         });
       });
 
-    const colors = [
-      { name: '翠绿', value: '#4CAF50' },
-      { name: '天蓝', value: '#2196F3' },
-      { name: '深紫', value: '#9C27B0' },
-      { name: '活力橙', value: '#FF9800' },
-      { name: '魅惑粉', value: '#E91E63' },
-      { name: '青色', value: '#00BCD4' },
-      { name: '明黄', value: '#FFEB3B' },
-      { name: '高级灰', value: '#607D8B' }
-    ];
 
     new Setting(contentEl)
       .setName('主题色')

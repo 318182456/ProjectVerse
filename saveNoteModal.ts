@@ -1,4 +1,4 @@
-import { App, Modal, Setting, TFolder, TFile, Notice } from 'obsidian';
+import { App, Modal, Setting, TFile, Notice, TextComponent } from 'obsidian';
 import { FolderSuggestModal } from './folderSuggestModal';
 
 export class SaveNoteModal extends Modal {
@@ -6,6 +6,7 @@ export class SaveNoteModal extends Modal {
   private fileName: string;
   private folderPath: string;
   private onSave: (newName: string, folderPath: string) => Promise<void>;
+  private folderTextComponent: TextComponent | null = null;
 
   constructor(app: App, file: TFile, defaultFolderPath: string, onSave: (newName: string, folderPath: string) => Promise<void>) {
     super(app);
@@ -23,7 +24,7 @@ export class SaveNoteModal extends Modal {
     contentEl.empty();
     contentEl.createEl('h2', { text: '保存临时笔记' });
 
-    let fileNameSetting = new Setting(contentEl)
+    new Setting(contentEl)
       .setName('文件名')
       .setDesc('请输入笔记文件名')
       .addText(text => text
@@ -32,7 +33,7 @@ export class SaveNoteModal extends Modal {
           this.fileName = value;
         }));
 
-    let folderSetting = new Setting(contentEl)
+    new Setting(contentEl)
       .setName('保存文件夹')
       .setDesc('选择笔记要保存的文件夹路径')
       .addText(text => {
@@ -40,10 +41,10 @@ export class SaveNoteModal extends Modal {
         text.onChange(value => {
           this.folderPath = value;
         });
-        text.inputEl.style.width = '180px';
+        text.inputEl.addClass('vps-save-folder-input');
         
         // Expose text component so we can update it from the button callback
-        (this as any).folderTextComponent = text;
+        this.folderTextComponent = text;
       })
       .addButton(btn => btn
         .setButtonText('浏览...')
@@ -51,8 +52,8 @@ export class SaveNoteModal extends Modal {
           new FolderSuggestModal(this.app, (folder) => {
             const path = folder.path === '/' ? '/' : folder.path;
             this.folderPath = path;
-            if ((this as any).folderTextComponent) {
-              (this as any).folderTextComponent.setValue(path);
+            if (this.folderTextComponent) {
+              this.folderTextComponent.setValue(path);
             }
           }).open();
         })
@@ -79,3 +80,4 @@ export class SaveNoteModal extends Modal {
     this.contentEl.empty();
   }
 }
+

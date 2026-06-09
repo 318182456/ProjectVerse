@@ -700,4 +700,69 @@
   border: 1px solid var(--vps-card-border);
 }
 
+/* 7. Added Styles to satisfy Obsidian Submission guidelines */
+.vps-save-folder-input {
+  width: 180px;
+}
+
+.vps-memo-textarea {
+  width: 100%;
+  height: 120px;
+}
+
+.vps-memo-preview-modal {
+  width: 95vw;
+  max-height: 95vh;
+}
+
+.vps-memo-preview-container {
+  padding: 10px;
+  overflow-y: auto;
+  max-height: calc(80vh - 80px);
+}
+
+.vps-dashboard-empty-state {
+  padding: 24px;
+  text-align: center;
+}
+
+.vps-hide-completed-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8em;
+  font-weight: normal;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-muted);
+}
+
+.vps-tasks-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vps-add-memo-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  transition: var(--vps-transition);
+}
+
+.vps-add-memo-btn:hover {
+  color: var(--text-normal) !important;
+}
+
+.vps-space-meta-padding {
+  padding: 8px;
+}
+
+
 

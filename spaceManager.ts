@@ -1,10 +1,11 @@
 import { App, TFile, TFolder, normalizePath } from 'obsidian';
-import { ProjectSpace, PluginSettings, QueryRule, WorkspaceState } from './types';
+import { ProjectSpace, PluginSettings, QueryRule } from './types';
 
 export class SpaceManager {
   private app: App;
   private settings: PluginSettings;
   private saveSettingsCallback: () => Promise<void>;
+  public tempNoteSpaceMap: Record<string, string> = {};
 
   constructor(app: App, settings: PluginSettings, saveSettingsCallback: () => Promise<void>) {
     this.app = app;
@@ -151,9 +152,8 @@ export class SpaceManager {
   // Handle file renames across the entire Vault
   async handleFileRename(oldPath: string, newPath: string): Promise<void> {
     // Clean up tempNoteSpaceMap entry if applicable
-    const map = (this as any).tempNoteSpaceMap;
-    if (map && map[oldPath]) {
-      delete map[oldPath];
+    if (this.tempNoteSpaceMap && this.tempNoteSpaceMap[oldPath]) {
+      delete this.tempNoteSpaceMap[oldPath];
     }
 
     let changed = false;
@@ -199,9 +199,8 @@ export class SpaceManager {
   // Handle file deletions
   async handleFileDelete(filePath: string): Promise<void> {
     // Clean up tempNoteSpaceMap entry if applicable
-    const map = (this as any).tempNoteSpaceMap;
-    if (map && map[filePath]) {
-      delete map[filePath];
+    if (this.tempNoteSpaceMap && this.tempNoteSpaceMap[filePath]) {
+      delete this.tempNoteSpaceMap[filePath];
     }
 
     let changed = false;
@@ -243,7 +242,7 @@ export class SpaceManager {
     // Include any files created or tagged for this space (by space name frontmatter property or temp note mapping)
     for (const file of allFiles) {
       if (file.extension === 'md') {
-        const cachedSpaceId = (this as any).tempNoteSpaceMap?.[file.path];
+        const cachedSpaceId = this.tempNoteSpaceMap?.[file.path];
         if (cachedSpaceId === spaceId) {
           matchedFiles.add(file);
         } else {
@@ -275,8 +274,7 @@ export class SpaceManager {
     // 3. Explicit tags and Smart Queries
     if (space.tags.length > 0 || (this.settings.enableDynamicQuery && space.queries.length > 0)) {
       for (const file of allFiles) {
-        const cache = this.app.metadataCache.getFileCache(file);
-        
+
         // Match explicit tags
         if (space.tags.length > 0) {
           const fileTags = this.getFileTags(file);

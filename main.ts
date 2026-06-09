@@ -1,16 +1,16 @@
-import { Plugin, WorkspaceLeaf, TFile, TFolder, TAbstractFile, Notice, normalizePath } from 'obsidian';
+import { Plugin, WorkspaceLeaf, TFile, TFolder, Notice, normalizePath, Events, App, SuggestModal, Menu, MenuItem } from 'obsidian';
 import { SpaceManager } from './spaceManager';
 import { VIEW_TYPE_SPACE_EXPLORER, SpaceExplorerView } from './spaceExplorerView';
 import { VIEW_TYPE_SPACE_DASHBOARD, SpaceDashboardView } from './spaceDashboardView';
-import { PluginSettings, DEFAULT_SETTINGS } from './types';
+import { PluginSettings, DEFAULT_SETTINGS, ProjectSpace } from './types';
 import { SpaceModal } from './spaceModal';
 import { SaveNoteModal } from './saveNoteModal';
 
-function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): (...args: Parameters<T>) => void {
-  let timeout: any = null;
-  return function(this: any, ...args: Parameters<T>) {
-    if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(() => fn.apply(this, args), delay);
+function debounce<T extends (...args: unknown[]) => unknown>(fn: T, delay: number): (...args: Parameters<T>) => void {
+  let timeout: number | null = null;
+  return function(this: unknown, ...args: Parameters<T>) {
+    if (timeout !== null) window.clearTimeout(timeout);
+    timeout = window.setTimeout(() => fn.apply(this, args), delay);
   };
 }
 
@@ -18,8 +18,8 @@ export default class VirtualProjectSpacePlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
   spaceManager!: SpaceManager;
   private isSavePending = false;
-  private debouncedSave = debounce(async () => {
-    await this.performSave();
+  private debouncedSave = debounce(() => {
+    void this.performSave();
   }, 1000);
 
   async onload() {
@@ -47,7 +47,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
     // Ribbon Icon
     this.addRibbonIcon('layers', '🗂️ 项目空间 Explorer', () => {
-      this.activateExplorerView();
+      void this.activateExplorerView();
     });
 
     // File Context Menu (Right Click)
@@ -61,23 +61,23 @@ export default class VirtualProjectSpacePlugin extends Plugin {
             .setIcon('folder-plus')
             .setSection('action');
 
-          const subMenu = (item as any).setSubmenu();
+          const subMenu = (item as unknown as { setSubmenu(): Menu }).setSubmenu();
           
           this.settings.spaces.forEach(space => {
-            subMenu.addItem((subItem: any) => {
+            subMenu.addItem((subItem: MenuItem) => {
               subItem.setTitle(space.name)
-                .onClick(async () => {
+                .onClick(() => {
                   if (file instanceof TFile) {
-                    await this.spaceManager.addFileToSpace(space.id, file.path);
+                    void this.spaceManager.addFileToSpace(space.id, file.path);
                   } else if (file instanceof TFolder) {
-                    await this.spaceManager.addFolderToSpace(space.id, file.path);
+                    void this.spaceManager.addFolderToSpace(space.id, file.path);
                   }
                 });
             });
           });
 
           subMenu.addSeparator();
-          subMenu.addItem((subItem: any) => {
+          subMenu.addItem((subItem: MenuItem) => {
             subItem.setTitle('+ 新建空间并添加')
               .onClick(() => {
                 new SpaceModal(this.app, async (name, icon, color) => {
@@ -87,7 +87,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
                   } else if (file instanceof TFolder) {
                     await this.spaceManager.addFolderToSpace(newSpace.id, file.path);
                   }
-                  this.activateSpace(newSpace.id);
+                  void this.activateSpace(newSpace.id);
                 }).open();
               });
           });
@@ -97,42 +97,46 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
     // Watch File Renames, Deletions, Creations, and Metadata Modifications
     this.registerEvent(
-      this.app.vault.on('create', (file) => {
+      this.app.vault.on('create', () => {
         this.updateViews();
       })
     );
 
     this.registerEvent(
-      this.app.vault.on('rename', async (file, oldPath) => {
-        await this.spaceManager.handleFileRename(oldPath, file.path);
-        this.updateViews();
+      this.app.vault.on('rename', (file, oldPath) => {
+        void (async () => {
+          await this.spaceManager.handleFileRename(oldPath, file.path);
+          this.updateViews();
+        })();
       })
     );
 
     this.registerEvent(
-      this.app.vault.on('delete', async (file) => {
-        await this.spaceManager.handleFileDelete(file.path);
-        this.updateViews();
+      this.app.vault.on('delete', (file) => {
+        void (async () => {
+          await this.spaceManager.handleFileDelete(file.path);
+          this.updateViews();
+        })();
       })
     );
 
     this.registerEvent(
-      this.app.metadataCache.on('changed', (file) => {
+      this.app.metadataCache.on('changed', () => {
         this.updateViews();
       })
     );
 
     // Global Custom Workspace Switch Events
-    const ws = this.app.workspace as any;
+    const ws = this.app.workspace as unknown as Events;
     this.registerEvent(
-      ws.on('vps-space-activated', (spaceId: string) => {
-        this.activateSpace(spaceId);
+      ws.on('vps-space-activated', (spaceId: unknown) => {
+        void this.activateSpace(spaceId as string);
       })
     );
 
     this.registerEvent(
-      ws.on('vps-open-dashboard', (spaceId: string) => {
-        this.openDashboard(spaceId);
+      ws.on('vps-open-dashboard', (spaceId: unknown) => {
+        void this.openDashboard(spaceId as string);
       })
     );
 
@@ -155,7 +159,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       callback: () => {
         new SpaceModal(this.app, async (name, icon, color) => {
           const space = await this.spaceManager.createSpace(name, icon, color);
-          this.activateSpace(space.id);
+          void this.activateSpace(space.id);
         }).open();
       }
     });
@@ -164,24 +168,15 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       id: 'switch-space',
       name: '切换项目空间 (Switch Space)',
       callback: () => {
-        // Build a quick picker using a custom modal or command list
-        // Obsidian commands usually don't have built-in quick pickers, but we can use fuzzy suggest modals
-        // Let's implement a simple list of sub-commands or show switch prompt
         const spaces = this.spaceManager.getSpaces();
         if (spaces.length === 0) {
-          alert('暂无项目空间，请先创建一个！');
+          new Notice('暂无项目空间，请先创建一个！');
           return;
         }
         
-        // Use standard prompt for simplicity
-        const names = spaces.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
-        const selection = prompt(`请输入要切换的空间序号：\n${names}`);
-        if (selection) {
-          const idx = parseInt(selection) - 1;
-          if (spaces[idx]) {
-            this.activateSpace(spaces[idx].id);
-          }
-        }
+        new SpaceSuggestModal(this.app, spaces, (space) => {
+          void this.activateSpace(space.id);
+        }).open();
       }
     });
 
@@ -190,15 +185,15 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       name: '打开当前空间控制面板 (Open Dashboard)',
       callback: () => {
         if (this.settings.activeSpaceId) {
-          this.openDashboard(this.settings.activeSpaceId);
+          void this.openDashboard(this.settings.activeSpaceId);
         } else {
-          alert('未激活任何项目空间！');
+          new Notice('未激活任何项目空间！');
         }
       }
     });
 
     // Intercept Ctrl+Shift+S / Cmd+Shift+S to save/move notes using capturing listener to beat editor hotkeys
-    this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
+    this.registerDomEvent(activeDocument, 'keydown', (evt: KeyboardEvent) => {
       // Ensure the key itself is not a modifier key like Control, Meta, or Shift
       if (evt.key === 'Control' || evt.key === 'Meta' || evt.key === 'Shift') {
         return;
@@ -209,34 +204,32 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         if (activeFile) {
           evt.preventDefault();
           evt.stopPropagation();
-          this.promptSaveTempNote(activeFile);
+          void this.promptSaveTempNote(activeFile);
         }
       }
     }, true);
   }
 
-  async onunload() {
+  onunload() {
     if (this.isSavePending) {
-      await this.performSave();
+      void this.performSave();
     }
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_EXPLORER);
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_DASHBOARD);
   }
 
   async loadPluginSettings() {
-    const CONFIG_DIR = this.manifest.dir || '.obsidian/plugins/project-verse';
+    const CONFIG_DIR = this.manifest.dir || `${this.app.vault.configDir}/plugins/project-verse`;
     const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
     const SPACES_DIR = `${CONFIG_DIR}/spaces`;
     const adapter = this.app.vault.adapter;
 
-    let loadedSettings: any = null;
-    const spaces: any[] = [];
+    let loadedSettings: Partial<PluginSettings> | null = null;
+    const spaces: ProjectSpace[] = [];
     let migrationNeeded = false;
 
     try {
       if (await adapter.exists(SETTINGS_PATH)) {
         const settingsContent = await adapter.read(SETTINGS_PATH);
-        loadedSettings = JSON.parse(settingsContent);
+        loadedSettings = JSON.parse(settingsContent) as Partial<PluginSettings>;
 
         if (await adapter.exists(SPACES_DIR)) {
           const filesList = await adapter.list(SPACES_DIR);
@@ -244,7 +237,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
             if (filePath.endsWith('.json')) {
               try {
                 const spaceContent = await adapter.read(filePath);
-                const spaceObj = JSON.parse(spaceContent);
+                const spaceObj = JSON.parse(spaceContent) as ProjectSpace;
                 if (spaceObj && spaceObj.id) {
                   spaces.push(spaceObj);
                 }
@@ -258,20 +251,20 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
         this.settings.spaces = spaces;
       } else {
-        const oldPluginDir = this.manifest.dir || '.obsidian/plugins/project-verse';
+        const oldPluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/project-verse`;
         const oldDataPath = `${oldPluginDir}/spaces.json`;
-        let oldData: any = null;
+        let oldData: Partial<PluginSettings> | null = null;
 
         if (await adapter.exists(oldDataPath)) {
           try {
             const content = await adapter.read(oldDataPath);
-            oldData = JSON.parse(content);
+            oldData = JSON.parse(content) as Partial<PluginSettings>;
             migrationNeeded = true;
           } catch (e) {
             console.warn("Failed to read old spaces.json", e);
           }
         } else {
-          const standardData = await this.loadData();
+          const standardData = await this.loadData() as Partial<PluginSettings> | null;
           if (standardData && (standardData.spaces || standardData.activeSpaceId)) {
             oldData = standardData;
             migrationNeeded = true;
@@ -311,7 +304,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     if (!this.isSavePending) return;
     this.isSavePending = false;
 
-    const CONFIG_DIR = this.manifest.dir || '.obsidian/plugins/project-verse';
+    const CONFIG_DIR = this.manifest.dir || `${this.app.vault.configDir}/plugins/project-verse`;
     const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
     const SPACES_DIR = `${CONFIG_DIR}/spaces`;
     const adapter = this.app.vault.adapter;
@@ -324,7 +317,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         await adapter.mkdir(SPACES_DIR);
       }
 
-      const { spaces, ...globalSettings } = this.settings;
+      const { spaces: _spaces, ...globalSettings } = this.settings;
       await adapter.write(SETTINGS_PATH, JSON.stringify(globalSettings, null, 2));
 
       const currentSpaceIds = new Set<string>();
@@ -566,9 +559,8 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         }
         
         // Ensure to remove the map reference after save has finalized
-        const map = (this.spaceManager as any).tempNoteSpaceMap;
-        if (map && map[file.path]) {
-          delete map[file.path];
+        if (this.spaceManager.tempNoteSpaceMap && this.spaceManager.tempNoteSpaceMap[file.path]) {
+          delete this.spaceManager.tempNoteSpaceMap[file.path];
         }
 
         this.updateViews();
@@ -579,3 +571,28 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     }).open();
   }
 }
+
+class SpaceSuggestModal extends SuggestModal<ProjectSpace> {
+  private spaces: ProjectSpace[];
+  private onChoose: (space: ProjectSpace) => void;
+
+  constructor(app: App, spaces: ProjectSpace[], onChoose: (space: ProjectSpace) => void) {
+    super(app);
+    this.spaces = spaces;
+    this.onChoose = onChoose;
+    this.setPlaceholder("选择要切换的项目空间...");
+  }
+
+  getSuggestions(query: string): ProjectSpace[] {
+    return this.spaces.filter(space => space.name.toLowerCase().includes(query.toLowerCase()));
+  }
+
+  renderSuggestion(space: ProjectSpace, el: HTMLElement) {
+    el.createEl("div", { text: space.name });
+  }
+
+  onChooseSuggestion(space: ProjectSpace, evt: MouseEvent | KeyboardEvent) {
+    this.onChoose(space);
+  }
+}
+

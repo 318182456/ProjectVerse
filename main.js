@@ -34,6 +34,7 @@ var import_obsidian7 = require("obsidian");
 var import_obsidian = require("obsidian");
 var SpaceManager = class {
   constructor(app, settings, saveSettingsCallback) {
+    this.tempNoteSpaceMap = {};
     this.app = app;
     this.settings = settings;
     this.saveSettingsCallback = saveSettingsCallback;
@@ -160,9 +161,8 @@ var SpaceManager = class {
   }
   // Handle file renames across the entire Vault
   async handleFileRename(oldPath, newPath) {
-    const map = this.tempNoteSpaceMap;
-    if (map && map[oldPath]) {
-      delete map[oldPath];
+    if (this.tempNoteSpaceMap && this.tempNoteSpaceMap[oldPath]) {
+      delete this.tempNoteSpaceMap[oldPath];
     }
     let changed = false;
     for (const space of this.settings.spaces) {
@@ -199,9 +199,8 @@ var SpaceManager = class {
   }
   // Handle file deletions
   async handleFileDelete(filePath) {
-    const map = this.tempNoteSpaceMap;
-    if (map && map[filePath]) {
-      delete map[filePath];
+    if (this.tempNoteSpaceMap && this.tempNoteSpaceMap[filePath]) {
+      delete this.tempNoteSpaceMap[filePath];
     }
     let changed = false;
     for (const space of this.settings.spaces) {
@@ -263,7 +262,6 @@ var SpaceManager = class {
     }
     if (space.tags.length > 0 || this.settings.enableDynamicQuery && space.queries.length > 0) {
       for (const file of allFiles) {
-        const cache = this.app.metadataCache.getFileCache(file);
         if (space.tags.length > 0) {
           const fileTags = this.getFileTags(file);
           const hasMatchingTag = space.tags.some((t) => fileTags.includes(t.toLowerCase()));
@@ -391,16 +389,6 @@ var SpaceModal = class extends import_obsidian2.Modal {
         this.icon = value;
       });
     });
-    const colors = [
-      { name: "\u7FE0\u7EFF", value: "#4CAF50" },
-      { name: "\u5929\u84DD", value: "#2196F3" },
-      { name: "\u6DF1\u7D2B", value: "#9C27B0" },
-      { name: "\u6D3B\u529B\u6A59", value: "#FF9800" },
-      { name: "\u9B45\u60D1\u7C89", value: "#E91E63" },
-      { name: "\u9752\u8272", value: "#00BCD4" },
-      { name: "\u660E\u9EC4", value: "#FFEB3B" },
-      { name: "\u9AD8\u7EA7\u7070", value: "#607D8B" }
-    ];
     new import_obsidian2.Setting(contentEl).setName("\u4E3B\u9898\u8272").setDesc("\u8BE5\u7A7A\u95F4\u7684\u4E3B\u8272\u8C03").addColorPicker((colorPicker) => {
       colorPicker.setValue(this.color);
       colorPicker.onChange((value) => {
@@ -713,7 +701,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
             if (choice === "delete") {
               const file = this.app.vault.getAbstractFileByPath(this.selectedPath);
               if (file instanceof import_obsidian3.TFile) {
-                await this.app.vault.delete(file);
+                await this.app.fileManager.trashFile(file);
                 this.selectedPath = null;
                 this.render();
               }
@@ -805,9 +793,8 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
         if (files.length === 0 && folders.length === 0) {
           const d = treeContainer.createDiv({
             text: '\u8BE5\u7A7A\u95F4\u6682\u65E0\u5173\u8054\u6587\u4EF6\u3002\u53F3\u952E\u6587\u4EF6\u5217\u8868\u9009\u62E9 "Add to Space" \u52A0\u5165\u3002',
-            cls: "vps-space-meta"
+            cls: "vps-space-meta vps-space-meta-padding"
           });
-          d.style.cssText = "padding: 8px;";
         } else {
           const rootNode = this.buildVirtualTree(files, folders);
           this.renderTreeNodes(treeContainer, rootNode, 0, activeSpaceId);
@@ -1051,7 +1038,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
                       folders: space.folders
                     });
                   }
-                  await this.app.vault.delete(folder, true);
+                  await this.app.fileManager.trashFile(folder);
                   if (this.selectedPath === childNode.path) {
                     this.selectedPath = null;
                   }
@@ -1133,7 +1120,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
               ], false);
               if (confirmDelete) {
                 if (childNode.file) {
-                  await this.app.vault.delete(childNode.file);
+                  await this.app.fileManager.trashFile(childNode.file);
                   if (this.selectedPath === childNode.path) {
                     this.selectedPath = null;
                   }
@@ -1407,43 +1394,44 @@ var MemoModal = class extends import_obsidian4.Modal {
     contentEl.empty();
     contentEl.createEl("h2", { text: this.titleText });
     new import_obsidian4.Setting(contentEl).setName("\u5907\u5FD8\u5185\u5BB9").addTextArea((text) => {
-      text.inputEl.style.width = "100%";
-      text.inputEl.style.height = "120px";
+      text.inputEl.addClass("vps-memo-textarea");
       text.setValue(this.text).setPlaceholder("\u8BF7\u8F93\u5165\u5907\u5FD8\u4E8B\u9879\u5185\u5BB9").onChange((value) => {
         this.text = value;
       });
-      text.inputEl.addEventListener("paste", async (e) => {
+      text.inputEl.addEventListener("paste", (e) => {
         const files = e.clipboardData?.files;
         if (files && files.length > 0) {
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
             if (file.type.startsWith("image/")) {
               e.preventDefault();
-              try {
-                const arrayBuffer = await file.arrayBuffer();
-                const extension = file.name.split(".").pop() || "png";
-                const filename = `paste-${Date.now()}.${extension}`;
-                const folderPath = "attachments";
-                if (!this.app.vault.getAbstractFileByPath(folderPath)) {
-                  await this.app.vault.createFolder(folderPath);
+              void (async () => {
+                try {
+                  const arrayBuffer = await file.arrayBuffer();
+                  const extension = file.name.split(".").pop() || "png";
+                  const filename = `paste-${Date.now()}.${extension}`;
+                  const folderPath = "attachments";
+                  if (!this.app.vault.getAbstractFileByPath(folderPath)) {
+                    await this.app.vault.createFolder(folderPath);
+                  }
+                  const filePath = `${folderPath}/${filename}`;
+                  const tFile = await this.app.vault.createBinary(filePath, arrayBuffer);
+                  const linkText = `![[${tFile.path}]]`;
+                  const textarea = text.inputEl;
+                  const startPos = textarea.selectionStart;
+                  const endPos = textarea.selectionEnd;
+                  const currentText = textarea.value;
+                  const newText = currentText.substring(0, startPos) + linkText + currentText.substring(endPos);
+                  textarea.value = newText;
+                  this.text = newText;
+                  text.setValue(newText);
+                  textarea.focus();
+                  textarea.setSelectionRange(startPos + linkText.length, startPos + linkText.length);
+                } catch (error) {
+                  console.error("Failed to save pasted image:", error);
+                  new import_obsidian4.Notice("\u7C98\u8D34\u56FE\u7247\u4FDD\u5B58\u5931\u8D25\uFF1A" + (error instanceof Error ? error.message : String(error)));
                 }
-                const filePath = `${folderPath}/${filename}`;
-                const tFile = await this.app.vault.createBinary(filePath, arrayBuffer);
-                const linkText = `![[${tFile.path}]]`;
-                const textarea = text.inputEl;
-                const startPos = textarea.selectionStart;
-                const endPos = textarea.selectionEnd;
-                const currentText = textarea.value;
-                const newText = currentText.substring(0, startPos) + linkText + currentText.substring(endPos);
-                textarea.value = newText;
-                this.text = newText;
-                text.setValue(newText);
-                textarea.focus();
-                textarea.setSelectionRange(startPos + linkText.length, startPos + linkText.length);
-              } catch (error) {
-                console.error("Failed to save pasted image:", error);
-                new import_obsidian4.Notice("\u7C98\u8D34\u56FE\u7247\u4FDD\u5B58\u5931\u8D25\uFF1A" + (error instanceof Error ? error.message : String(error)));
-              }
+              })();
             }
           }
         }
@@ -1476,12 +1464,10 @@ var MemoPreviewModal = class extends import_obsidian4.Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
-    this.modalEl.style.width = "95vw";
-    this.modalEl.style.maxHeight = "95vh";
+    this.modalEl.addClass("vps-memo-preview-modal");
     const container = contentEl.createDiv({ cls: "vps-memo-preview-container" });
-    container.style.cssText = "padding: 10px; overflow-y: auto; max-height: calc(80vh - 80px);";
     const resolvedMarkdown = this.resolveImageLinks(this.text);
-    import_obsidian4.MarkdownRenderer.renderMarkdown(resolvedMarkdown, container, "", this.component);
+    void import_obsidian4.MarkdownRenderer.render(this.app, resolvedMarkdown, container, "", this.component);
   }
   onClose() {
     this.contentEl.empty();
@@ -1522,10 +1508,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const activeSpaceId = this.app.plugins?.plugins?.["project-verse"]?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     this.spaceId = targetId;
-    this.leaf.updateHeader();
-    const viewAny = this;
-    if (viewAny.titleEl) {
-      viewAny.titleEl.setText(this.getDisplayText());
+    void this.leaf.updateHeader();
+    const titleEl = this.titleEl;
+    if (titleEl) {
+      titleEl.setText(this.getDisplayText());
     }
     const renderVersion = ++this.currentRenderVersion;
     const container = this.contentEl;
@@ -1533,9 +1519,8 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       container.empty();
       const d = container.createDiv({
         text: "\u8BF7\u5728\u4FA7\u8FB9\u680F\u9009\u62E9\u5E76\u6FC0\u6D3B\u4E00\u4E2A\u9879\u76EE\u7A7A\u95F4\u4EE5\u52A0\u8F7D Dashboard\u3002",
-        cls: "vps-space-meta"
+        cls: "vps-space-meta vps-dashboard-empty-state"
       });
-      d.style.cssText = "padding: 24px; text-align: center;";
       return;
     }
     const space = this.spaceManager.getSpace(targetId);
@@ -1543,9 +1528,8 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       container.empty();
       const d = container.createDiv({
         text: "\u672A\u627E\u5230\u9009\u5B9A\u7684\u9879\u76EE\u7A7A\u95F4\u3002",
-        cls: "vps-space-meta"
+        cls: "vps-space-meta vps-dashboard-empty-state"
       });
-      d.style.cssText = "padding: 24px; text-align: center;";
       return;
     }
     const loadedTasks = await this.scanTasks(space);
@@ -1604,7 +1588,6 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const hideCompletedLabel = tasksActions.createEl("label", {
       cls: "vps-hide-completed-label"
     });
-    hideCompletedLabel.style.cssText = "display: flex; align-items: center; gap: 4px; font-size: 0.8em; font-weight: normal; cursor: pointer; user-select: none; color: var(--text-muted);";
     const hideCompletedCheckbox = hideCompletedLabel.createEl("input", {
       type: "checkbox"
     });
@@ -1615,8 +1598,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       await this.spaceManager.updateSpace(space.id, { hideCompletedTasks: this.hideCompleted });
       this.render();
     });
-    const tasksList = tasksCard.createDiv();
-    tasksList.style.cssText = "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;";
+    const tasksList = tasksCard.createDiv({ cls: "vps-tasks-list" });
     tasksCard.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       const menu = new import_obsidian4.Menu();
@@ -1707,17 +1689,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     });
     const memoActions = memoHeader.createDiv({ cls: "vps-quick-actions" });
     const addMemoBtn = memoActions.createEl("button", {
-      cls: "vps-btn-icon",
+      cls: "vps-btn-icon vps-add-memo-btn",
       title: "\u6DFB\u52A0\u5907\u5FD8"
     });
     (0, import_obsidian4.setIcon)(addMemoBtn, "plus");
-    addMemoBtn.style.cssText = "background: none; border: none; padding: 2px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center;";
-    addMemoBtn.addEventListener("mouseenter", () => {
-      addMemoBtn.style.color = "var(--text-normal)";
-    });
-    addMemoBtn.addEventListener("mouseleave", () => {
-      addMemoBtn.style.color = "var(--text-muted)";
-    });
     const openAddMemoModal = () => {
       new MemoModal(this.app, "\u6DFB\u52A0\u5907\u5FD8\u5F55", "\u6DFB\u52A0", "", async (text) => {
         const currentSpace = this.spaceManager.getSpace(this.spaceId);
@@ -1738,7 +1713,6 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       openAddMemoModal();
     });
     const memoList = memoCard.createDiv({ cls: "vps-memo-list" });
-    memoList.style.cssText = "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;";
     memoCard.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       const menu = new import_obsidian4.Menu();
@@ -1805,7 +1779,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
           cls: "vps-memo-text"
         });
         const resolvedMarkdown = this.resolveImageLinks(memo.text);
-        import_obsidian4.MarkdownRenderer.renderMarkdown(resolvedMarkdown, memoContent, "", this);
+        void import_obsidian4.MarkdownRenderer.render(this.app, resolvedMarkdown, memoContent, "", this);
         memoContent.addEventListener("click", (e) => {
           const target = e.target;
           if (target.tagName === "IMG") {
@@ -2017,7 +1991,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         const file = this.app.vault.getAbstractFileByPath(path);
         if (file instanceof import_obsidian4.TFile) {
           try {
-            await this.app.vault.delete(file);
+            await this.app.fileManager.trashFile(file);
           } catch (err) {
             console.error("Failed to delete attachment file:", path, err);
           }
@@ -2081,6 +2055,7 @@ var FolderSuggestModal = class extends import_obsidian5.FuzzySuggestModal {
 var SaveNoteModal = class extends import_obsidian6.Modal {
   constructor(app, file, defaultFolderPath, onSave) {
     super(app);
+    this.folderTextComponent = null;
     this.file = file;
     this.fileName = file.basename.startsWith("_temp_") ? file.basename.replace(/^_temp_(_\d+)?_/, "") : file.basename;
     this.folderPath = defaultFolderPath;
@@ -2090,15 +2065,15 @@ var SaveNoteModal = class extends import_obsidian6.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.createEl("h2", { text: "\u4FDD\u5B58\u4E34\u65F6\u7B14\u8BB0" });
-    let fileNameSetting = new import_obsidian6.Setting(contentEl).setName("\u6587\u4EF6\u540D").setDesc("\u8BF7\u8F93\u5165\u7B14\u8BB0\u6587\u4EF6\u540D").addText((text) => text.setValue(this.fileName).onChange((value) => {
+    new import_obsidian6.Setting(contentEl).setName("\u6587\u4EF6\u540D").setDesc("\u8BF7\u8F93\u5165\u7B14\u8BB0\u6587\u4EF6\u540D").addText((text) => text.setValue(this.fileName).onChange((value) => {
       this.fileName = value;
     }));
-    let folderSetting = new import_obsidian6.Setting(contentEl).setName("\u4FDD\u5B58\u6587\u4EF6\u5939").setDesc("\u9009\u62E9\u7B14\u8BB0\u8981\u4FDD\u5B58\u7684\u6587\u4EF6\u5939\u8DEF\u5F84").addText((text) => {
+    new import_obsidian6.Setting(contentEl).setName("\u4FDD\u5B58\u6587\u4EF6\u5939").setDesc("\u9009\u62E9\u7B14\u8BB0\u8981\u4FDD\u5B58\u7684\u6587\u4EF6\u5939\u8DEF\u5F84").addText((text) => {
       text.setValue(this.folderPath);
       text.onChange((value) => {
         this.folderPath = value;
       });
-      text.inputEl.style.width = "180px";
+      text.inputEl.addClass("vps-save-folder-input");
       this.folderTextComponent = text;
     }).addButton(
       (btn) => btn.setButtonText("\u6D4F\u89C8...").onClick(() => {
@@ -2129,9 +2104,9 @@ var SaveNoteModal = class extends import_obsidian6.Modal {
 function debounce(fn, delay) {
   let timeout = null;
   return function(...args) {
-    if (timeout)
-      clearTimeout(timeout);
-    timeout = setTimeout(() => fn.apply(this, args), delay);
+    if (timeout !== null)
+      window.clearTimeout(timeout);
+    timeout = window.setTimeout(() => fn.apply(this, args), delay);
   };
 }
 var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
@@ -2139,8 +2114,8 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
     this.isSavePending = false;
-    this.debouncedSave = debounce(async () => {
-      await this.performSave();
+    this.debouncedSave = debounce(() => {
+      void this.performSave();
     }, 1e3);
   }
   async onload() {
@@ -2162,7 +2137,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       (leaf) => new SpaceDashboardView(leaf, this.spaceManager)
     );
     this.addRibbonIcon("layers", "\u{1F5C2}\uFE0F \u9879\u76EE\u7A7A\u95F4 Explorer", () => {
-      this.activateExplorerView();
+      void this.activateExplorerView();
     });
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
@@ -2174,11 +2149,11 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
           const subMenu = item.setSubmenu();
           this.settings.spaces.forEach((space) => {
             subMenu.addItem((subItem) => {
-              subItem.setTitle(space.name).onClick(async () => {
+              subItem.setTitle(space.name).onClick(() => {
                 if (file instanceof import_obsidian7.TFile) {
-                  await this.spaceManager.addFileToSpace(space.id, file.path);
+                  void this.spaceManager.addFileToSpace(space.id, file.path);
                 } else if (file instanceof import_obsidian7.TFolder) {
-                  await this.spaceManager.addFolderToSpace(space.id, file.path);
+                  void this.spaceManager.addFolderToSpace(space.id, file.path);
                 }
               });
             });
@@ -2193,7 +2168,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
                 } else if (file instanceof import_obsidian7.TFolder) {
                   await this.spaceManager.addFolderToSpace(newSpace.id, file.path);
                 }
-                this.activateSpace(newSpace.id);
+                void this.activateSpace(newSpace.id);
               }).open();
             });
           });
@@ -2201,36 +2176,40 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       })
     );
     this.registerEvent(
-      this.app.vault.on("create", (file) => {
+      this.app.vault.on("create", () => {
         this.updateViews();
       })
     );
     this.registerEvent(
-      this.app.vault.on("rename", async (file, oldPath) => {
-        await this.spaceManager.handleFileRename(oldPath, file.path);
-        this.updateViews();
+      this.app.vault.on("rename", (file, oldPath) => {
+        void (async () => {
+          await this.spaceManager.handleFileRename(oldPath, file.path);
+          this.updateViews();
+        })();
       })
     );
     this.registerEvent(
-      this.app.vault.on("delete", async (file) => {
-        await this.spaceManager.handleFileDelete(file.path);
-        this.updateViews();
+      this.app.vault.on("delete", (file) => {
+        void (async () => {
+          await this.spaceManager.handleFileDelete(file.path);
+          this.updateViews();
+        })();
       })
     );
     this.registerEvent(
-      this.app.metadataCache.on("changed", (file) => {
+      this.app.metadataCache.on("changed", () => {
         this.updateViews();
       })
     );
     const ws = this.app.workspace;
     this.registerEvent(
       ws.on("vps-space-activated", (spaceId) => {
-        this.activateSpace(spaceId);
+        void this.activateSpace(spaceId);
       })
     );
     this.registerEvent(
       ws.on("vps-open-dashboard", (spaceId) => {
-        this.openDashboard(spaceId);
+        void this.openDashboard(spaceId);
       })
     );
     this.registerEvent(
@@ -2249,7 +2228,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       callback: () => {
         new SpaceModal(this.app, async (name, icon, color) => {
           const space = await this.spaceManager.createSpace(name, icon, color);
-          this.activateSpace(space.id);
+          void this.activateSpace(space.id);
         }).open();
       }
     });
@@ -2259,18 +2238,12 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       callback: () => {
         const spaces = this.spaceManager.getSpaces();
         if (spaces.length === 0) {
-          alert("\u6682\u65E0\u9879\u76EE\u7A7A\u95F4\uFF0C\u8BF7\u5148\u521B\u5EFA\u4E00\u4E2A\uFF01");
+          new import_obsidian7.Notice("\u6682\u65E0\u9879\u76EE\u7A7A\u95F4\uFF0C\u8BF7\u5148\u521B\u5EFA\u4E00\u4E2A\uFF01");
           return;
         }
-        const names = spaces.map((s, idx) => `${idx + 1}. ${s.name}`).join("\n");
-        const selection = prompt(`\u8BF7\u8F93\u5165\u8981\u5207\u6362\u7684\u7A7A\u95F4\u5E8F\u53F7\uFF1A
-${names}`);
-        if (selection) {
-          const idx = parseInt(selection) - 1;
-          if (spaces[idx]) {
-            this.activateSpace(spaces[idx].id);
-          }
-        }
+        new SpaceSuggestModal(this.app, spaces, (space) => {
+          void this.activateSpace(space.id);
+        }).open();
       }
     });
     this.addCommand({
@@ -2278,13 +2251,13 @@ ${names}`);
       name: "\u6253\u5F00\u5F53\u524D\u7A7A\u95F4\u63A7\u5236\u9762\u677F (Open Dashboard)",
       callback: () => {
         if (this.settings.activeSpaceId) {
-          this.openDashboard(this.settings.activeSpaceId);
+          void this.openDashboard(this.settings.activeSpaceId);
         } else {
-          alert("\u672A\u6FC0\u6D3B\u4EFB\u4F55\u9879\u76EE\u7A7A\u95F4\uFF01");
+          new import_obsidian7.Notice("\u672A\u6FC0\u6D3B\u4EFB\u4F55\u9879\u76EE\u7A7A\u95F4\uFF01");
         }
       }
     });
-    this.registerDomEvent(document, "keydown", (evt) => {
+    this.registerDomEvent(activeDocument, "keydown", (evt) => {
       if (evt.key === "Control" || evt.key === "Meta" || evt.key === "Shift") {
         return;
       }
@@ -2294,20 +2267,18 @@ ${names}`);
         if (activeFile) {
           evt.preventDefault();
           evt.stopPropagation();
-          this.promptSaveTempNote(activeFile);
+          void this.promptSaveTempNote(activeFile);
         }
       }
     }, true);
   }
-  async onunload() {
+  onunload() {
     if (this.isSavePending) {
-      await this.performSave();
+      void this.performSave();
     }
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_EXPLORER);
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_DASHBOARD);
   }
   async loadPluginSettings() {
-    const CONFIG_DIR = this.manifest.dir || ".obsidian/plugins/project-verse";
+    const CONFIG_DIR = this.manifest.dir || `${this.app.vault.configDir}/plugins/project-verse`;
     const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
     const SPACES_DIR = `${CONFIG_DIR}/spaces`;
     const adapter = this.app.vault.adapter;
@@ -2337,7 +2308,7 @@ ${names}`);
         this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
         this.settings.spaces = spaces;
       } else {
-        const oldPluginDir = this.manifest.dir || ".obsidian/plugins/project-verse";
+        const oldPluginDir = this.manifest.dir || `${this.app.vault.configDir}/plugins/project-verse`;
         const oldDataPath = `${oldPluginDir}/spaces.json`;
         let oldData = null;
         if (await adapter.exists(oldDataPath)) {
@@ -2385,7 +2356,7 @@ ${names}`);
     if (!this.isSavePending)
       return;
     this.isSavePending = false;
-    const CONFIG_DIR = this.manifest.dir || ".obsidian/plugins/project-verse";
+    const CONFIG_DIR = this.manifest.dir || `${this.app.vault.configDir}/plugins/project-verse`;
     const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
     const SPACES_DIR = `${CONFIG_DIR}/spaces`;
     const adapter = this.app.vault.adapter;
@@ -2396,7 +2367,7 @@ ${names}`);
       if (!await adapter.exists(SPACES_DIR)) {
         await adapter.mkdir(SPACES_DIR);
       }
-      const { spaces, ...globalSettings } = this.settings;
+      const { spaces: _spaces, ...globalSettings } = this.settings;
       await adapter.write(SETTINGS_PATH, JSON.stringify(globalSettings, null, 2));
       const currentSpaceIds = /* @__PURE__ */ new Set();
       for (const space of this.settings.spaces) {
@@ -2588,9 +2559,8 @@ ${names}`);
             }
           }
         }
-        const map = this.spaceManager.tempNoteSpaceMap;
-        if (map && map[file.path]) {
-          delete map[file.path];
+        if (this.spaceManager.tempNoteSpaceMap && this.spaceManager.tempNoteSpaceMap[file.path]) {
+          delete this.spaceManager.tempNoteSpaceMap[file.path];
         }
         this.updateViews();
       } catch (e) {
@@ -2598,5 +2568,22 @@ ${names}`);
         new import_obsidian7.Notice("\u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u8DEF\u5F84\u662F\u5426\u6B63\u786E\u3002");
       }
     }).open();
+  }
+};
+var SpaceSuggestModal = class extends import_obsidian7.SuggestModal {
+  constructor(app, spaces, onChoose) {
+    super(app);
+    this.spaces = spaces;
+    this.onChoose = onChoose;
+    this.setPlaceholder("\u9009\u62E9\u8981\u5207\u6362\u7684\u9879\u76EE\u7A7A\u95F4...");
+  }
+  getSuggestions(query) {
+    return this.spaces.filter((space) => space.name.toLowerCase().includes(query.toLowerCase()));
+  }
+  renderSuggestion(space, el) {
+    el.createEl("div", { text: space.name });
+  }
+  onChooseSuggestion(space, evt) {
+    this.onChoose(space);
   }
 };

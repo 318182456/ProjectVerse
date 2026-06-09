@@ -3,7 +3,6 @@ import {
   WorkspaceLeaf,
   setIcon,
   TFile,
-  normalizePath,
   Notice,
   App,
   Menu,
@@ -95,8 +94,7 @@ class MemoModal extends Modal {
     new Setting(contentEl)
       .setName("备忘内容")
       .addTextArea(text => {
-        text.inputEl.style.width = "100%";
-        text.inputEl.style.height = "120px";
+        text.inputEl.addClass("vps-memo-textarea");
         text
           .setValue(this.text)
           .setPlaceholder("请输入备忘事项内容")
@@ -104,7 +102,7 @@ class MemoModal extends Modal {
             this.text = value;
           });
 
-        text.inputEl.addEventListener("paste", async (e: ClipboardEvent) => {
+        text.inputEl.addEventListener("paste", (e: ClipboardEvent) => {
           const files = e.clipboardData?.files;
           if (files && files.length > 0) {
             for (let i = 0; i < files.length; i++) {
@@ -112,37 +110,39 @@ class MemoModal extends Modal {
               if (file.type.startsWith("image/")) {
                 e.preventDefault(); // Stop default paste text behavior
 
-                try {
-                  const arrayBuffer = await file.arrayBuffer();
-                  const extension = file.name.split(".").pop() || "png";
-                  const filename = `paste-${Date.now()}.${extension}`;
-                  const folderPath = "attachments";
+                void (async () => {
+                  try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const extension = file.name.split(".").pop() || "png";
+                    const filename = `paste-${Date.now()}.${extension}`;
+                    const folderPath = "attachments";
 
-                  // Ensure folder exists
-                  if (!this.app.vault.getAbstractFileByPath(folderPath)) {
-                    await this.app.vault.createFolder(folderPath);
+                    // Ensure folder exists
+                    if (!this.app.vault.getAbstractFileByPath(folderPath)) {
+                      await this.app.vault.createFolder(folderPath);
+                    }
+
+                    const filePath = `${folderPath}/${filename}`;
+                    const tFile = await this.app.vault.createBinary(filePath, arrayBuffer);
+                    const linkText = `![[${tFile.path}]]`;
+
+                    const textarea = text.inputEl;
+                    const startPos = textarea.selectionStart;
+                    const endPos = textarea.selectionEnd;
+                    const currentText = textarea.value;
+
+                    const newText = currentText.substring(0, startPos) + linkText + currentText.substring(endPos);
+                    textarea.value = newText;
+                    this.text = newText;
+                    text.setValue(newText);
+
+                    textarea.focus();
+                    textarea.setSelectionRange(startPos + linkText.length, startPos + linkText.length);
+                  } catch (error: unknown) {
+                    console.error("Failed to save pasted image:", error);
+                    new Notice("粘贴图片保存失败：" + (error instanceof Error ? error.message : String(error)));
                   }
-
-                  const filePath = `${folderPath}/${filename}`;
-                  const tFile = await this.app.vault.createBinary(filePath, arrayBuffer);
-                  const linkText = `![[${tFile.path}]]`;
-
-                  const textarea = text.inputEl;
-                  const startPos = textarea.selectionStart;
-                  const endPos = textarea.selectionEnd;
-                  const currentText = textarea.value;
-
-                  const newText = currentText.substring(0, startPos) + linkText + currentText.substring(endPos);
-                  textarea.value = newText;
-                  this.text = newText;
-                  text.setValue(newText);
-
-                  textarea.focus();
-                  textarea.setSelectionRange(startPos + linkText.length, startPos + linkText.length);
-                } catch (error: any) {
-                  console.error("Failed to save pasted image:", error);
-                  new Notice("粘贴图片保存失败：" + (error instanceof Error ? error.message : String(error)));
-                }
+                })();
               }
             }
           }
@@ -189,15 +189,13 @@ class MemoPreviewModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
 
-    // Style modal window
-    this.modalEl.style.width = "95vw";
-    this.modalEl.style.maxHeight = "95vh";
+    // Style modal window via class
+    this.modalEl.addClass("vps-memo-preview-modal");
 
     const container = contentEl.createDiv({ cls: "vps-memo-preview-container" });
-    container.style.cssText = "padding: 10px; overflow-y: auto; max-height: calc(80vh - 80px);";
 
     const resolvedMarkdown = this.resolveImageLinks(this.text);
-    MarkdownRenderer.renderMarkdown(resolvedMarkdown, container, "", this.component);
+    void MarkdownRenderer.render(this.app, resolvedMarkdown, container, "", this.component);
   }
 
   onClose() {
@@ -222,7 +220,7 @@ export class SpaceDashboardView extends ItemView {
   }
 
   getDisplayText(): string {
-    const activeSpaceId = (this.app as any).plugins?.plugins?.["project-verse"]
+    const activeSpaceId = (this.app as unknown as { plugins: { plugins: Record<string, { settings: { activeSpaceId: string } }> } }).plugins?.plugins?.["project-verse"]
       ?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     if (targetId) {
@@ -246,15 +244,15 @@ export class SpaceDashboardView extends ItemView {
   }
 
   async render() {
-    const activeSpaceId = (this.app as any).plugins?.plugins?.["project-verse"]
+    const activeSpaceId = (this.app as unknown as { plugins: { plugins: Record<string, { settings: { activeSpaceId: string } }> } }).plugins?.plugins?.["project-verse"]
       ?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     this.spaceId = targetId;
 
-    (this.leaf as any).updateHeader();
-    const viewAny = this as any;
-    if (viewAny.titleEl) {
-      viewAny.titleEl.setText(this.getDisplayText());
+    void (this.leaf as unknown as { updateHeader(): void }).updateHeader();
+    const titleEl = (this as unknown as { titleEl: HTMLElement }).titleEl;
+    if (titleEl) {
+      titleEl.setText(this.getDisplayText());
     }
 
     const renderVersion = ++this.currentRenderVersion;
@@ -264,9 +262,8 @@ export class SpaceDashboardView extends ItemView {
       container.empty();
       const d = container.createDiv({
         text: "请在侧边栏选择并激活一个项目空间以加载 Dashboard。",
-        cls: "vps-space-meta",
+        cls: "vps-space-meta vps-dashboard-empty-state",
       });
-      d.style.cssText = "padding: 24px; text-align: center;";
       return;
     }
 
@@ -275,9 +272,8 @@ export class SpaceDashboardView extends ItemView {
       container.empty();
       const d = container.createDiv({
         text: "未找到选定的项目空间。",
-        cls: "vps-space-meta",
+        cls: "vps-space-meta vps-dashboard-empty-state",
       });
-      d.style.cssText = "padding: 24px; text-align: center;";
       return;
     }
 
@@ -362,8 +358,6 @@ export class SpaceDashboardView extends ItemView {
     const hideCompletedLabel = tasksActions.createEl("label", {
       cls: "vps-hide-completed-label",
     });
-    hideCompletedLabel.style.cssText =
-      "display: flex; align-items: center; gap: 4px; font-size: 0.8em; font-weight: normal; cursor: pointer; user-select: none; color: var(--text-muted);";
 
     const hideCompletedCheckbox = hideCompletedLabel.createEl("input", {
       type: "checkbox",
@@ -377,9 +371,7 @@ export class SpaceDashboardView extends ItemView {
       this.render();
     });
 
-    const tasksList = tasksCard.createDiv();
-    tasksList.style.cssText =
-      "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;";
+    const tasksList = tasksCard.createDiv({ cls: "vps-tasks-list" });
 
     // Context Menu for Tasks Card (Right click to add todo task)
     tasksCard.addEventListener("contextmenu", (event: MouseEvent) => {
@@ -491,14 +483,10 @@ export class SpaceDashboardView extends ItemView {
 
     const memoActions = memoHeader.createDiv({ cls: "vps-quick-actions" });
     const addMemoBtn = memoActions.createEl("button", {
-      cls: "vps-btn-icon",
+      cls: "vps-btn-icon vps-add-memo-btn",
       title: "添加备忘"
     });
     setIcon(addMemoBtn, "plus");
-    
-    addMemoBtn.style.cssText = "background: none; border: none; padding: 2px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center;";
-    addMemoBtn.addEventListener("mouseenter", () => { addMemoBtn.style.color = "var(--text-normal)"; });
-    addMemoBtn.addEventListener("mouseleave", () => { addMemoBtn.style.color = "var(--text-muted)"; });
 
     const openAddMemoModal = () => {
       new MemoModal(this.app, "添加备忘录", "添加", "", async (text) => {
@@ -521,8 +509,6 @@ export class SpaceDashboardView extends ItemView {
     });
 
     const memoList = memoCard.createDiv({ cls: "vps-memo-list" });
-    memoList.style.cssText =
-      "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;";
 
     // Context Menu for Memo Card
     memoCard.addEventListener("contextmenu", (event: MouseEvent) => {
@@ -603,7 +589,7 @@ export class SpaceDashboardView extends ItemView {
           cls: "vps-memo-text",
         });
         const resolvedMarkdown = this.resolveImageLinks(memo.text);
-        MarkdownRenderer.renderMarkdown(resolvedMarkdown, memoContent, "", this);
+        void MarkdownRenderer.render(this.app, resolvedMarkdown, memoContent, "", this);
 
         // Click on image inside memo text to preview
         memoContent.addEventListener("click", (e) => {
@@ -858,7 +844,7 @@ export class SpaceDashboardView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(path);
         if (file instanceof TFile) {
           try {
-            await this.app.vault.delete(file);
+            await this.app.fileManager.trashFile(file);
           } catch (err) {
             console.error("Failed to delete attachment file:", path, err);
           }
