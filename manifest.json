@@ -1,10 +1,10 @@
 {
   "id": "project-verse",
   "name": "ProjectVerse",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "minAppVersion": "1.0.0",
-  "description": "Manage projects with code, transforming Obsidian into your ultimate workspace.",
+  "description": "Manage projects with code, transforming your vault into the ultimate workspace.",
   "author": "318182456",
-  "authorUrl": "https://github.com/318182456/ProjectVerse",
+  "authorUrl": "https://github.com/318182456",
   "isDesktopOnly": false
 }
