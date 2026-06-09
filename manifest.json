@@ -1,7 +1,7 @@
 {
   "id": "project-verse",
   "name": "ProjectVerse",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "minAppVersion": "1.6.0",
   "description": "Manage projects with code, transforming your vault into the ultimate workspace.",
   "author": "318182456",
