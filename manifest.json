@@ -1,7 +1,7 @@
 {
-  "id": "projectVerse",
+  "id": "project-verse",
   "name": "ProjectVerse",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "minAppVersion": "1.0.0",
   "description": "Manage projects with code, transforming Obsidian into your ultimate workspace.",
   "author": "318182456",

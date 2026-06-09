@@ -460,7 +460,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     header.createDiv({ cls: "vps-explorer-title", text: "\u{1F5C2}\uFE0F \u9879\u76EE\u7A7A\u95F4" });
     const headerActions = header.createDiv({ cls: "vps-explorer-header-actions" });
     headerActions.addEventListener("click", (e) => e.stopPropagation());
-    const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
+    const activeSpaceId = this.app.plugins?.plugins?.["project-verse"]?.settings?.activeSpaceId;
     const activeSpace = activeSpaceId ? this.spaceManager.getSpace(activeSpaceId) : null;
     const addBtn = headerActions.createDiv({ cls: "vps-space-action-btn" });
     (0, import_obsidian3.setIcon)(addBtn, "plus");
@@ -1499,7 +1499,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     return VIEW_TYPE_SPACE_DASHBOARD;
   }
   getDisplayText() {
-    const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
+    const activeSpaceId = this.app.plugins?.plugins?.["project-verse"]?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     if (targetId) {
       const space = this.spaceManager.getSpace(targetId);
@@ -1519,7 +1519,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     this.render();
   }
   async render() {
-    const activeSpaceId = this.app.plugins?.plugins?.["projectVerse"]?.settings?.activeSpaceId;
+    const activeSpaceId = this.app.plugins?.plugins?.["project-verse"]?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     this.spaceId = targetId;
     this.leaf.updateHeader();
@@ -2307,7 +2307,7 @@ ${names}`);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_SPACE_DASHBOARD);
   }
   async loadPluginSettings() {
-    const CONFIG_DIR = this.manifest.dir || ".obsidian/plugins/projectVerse";
+    const CONFIG_DIR = this.manifest.dir || ".obsidian/plugins/project-verse";
     const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
     const SPACES_DIR = `${CONFIG_DIR}/spaces`;
     const adapter = this.app.vault.adapter;
@@ -2337,7 +2337,7 @@ ${names}`);
         this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
         this.settings.spaces = spaces;
       } else {
-        const oldPluginDir = this.manifest.dir || ".obsidian/plugins/projectVerse";
+        const oldPluginDir = this.manifest.dir || ".obsidian/plugins/project-verse";
         const oldDataPath = `${oldPluginDir}/spaces.json`;
         let oldData = null;
         if (await adapter.exists(oldDataPath)) {
@@ -2385,7 +2385,7 @@ ${names}`);
     if (!this.isSavePending)
       return;
     this.isSavePending = false;
-    const CONFIG_DIR = this.manifest.dir || ".obsidian/plugins/projectVerse";
+    const CONFIG_DIR = this.manifest.dir || ".obsidian/plugins/project-verse";
     const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
     const SPACES_DIR = `${CONFIG_DIR}/spaces`;
     const adapter = this.app.vault.adapter;

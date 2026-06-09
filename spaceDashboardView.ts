@@ -222,7 +222,7 @@ export class SpaceDashboardView extends ItemView {
   }
 
   getDisplayText(): string {
-    const activeSpaceId = (this.app as any).plugins?.plugins?.["projectVerse"]
+    const activeSpaceId = (this.app as any).plugins?.plugins?.["project-verse"]
       ?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     if (targetId) {
@@ -246,7 +246,7 @@ export class SpaceDashboardView extends ItemView {
   }
 
   async render() {
-    const activeSpaceId = (this.app as any).plugins?.plugins?.["projectVerse"]
+    const activeSpaceId = (this.app as any).plugins?.plugins?.["project-verse"]
       ?.settings?.activeSpaceId;
     const targetId = this.spaceId || activeSpaceId;
     this.spaceId = targetId;

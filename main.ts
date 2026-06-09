@@ -224,7 +224,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
   }
 
   async loadPluginSettings() {
-    const CONFIG_DIR = this.manifest.dir || '.obsidian/plugins/projectVerse';
+    const CONFIG_DIR = this.manifest.dir || '.obsidian/plugins/project-verse';
     const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
     const SPACES_DIR = `${CONFIG_DIR}/spaces`;
     const adapter = this.app.vault.adapter;
@@ -258,7 +258,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
         this.settings.spaces = spaces;
       } else {
-        const oldPluginDir = this.manifest.dir || '.obsidian/plugins/projectVerse';
+        const oldPluginDir = this.manifest.dir || '.obsidian/plugins/project-verse';
         const oldDataPath = `${oldPluginDir}/spaces.json`;
         let oldData: any = null;
 
@@ -311,7 +311,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     if (!this.isSavePending) return;
     this.isSavePending = false;
 
-    const CONFIG_DIR = this.manifest.dir || '.obsidian/plugins/projectVerse';
+    const CONFIG_DIR = this.manifest.dir || '.obsidian/plugins/project-verse';
     const SETTINGS_PATH = `${CONFIG_DIR}/settings.json`;
     const SPACES_DIR = `${CONFIG_DIR}/spaces`;
     const adapter = this.app.vault.adapter;

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const targetDir = 'C:\\Users\\admin\\Documents\\Obsidian\\WorkSpace\\.obsidian\\plugins\\projectVerse';
+const targetDir = 'C:\\Users\\admin\\Documents\\Obsidian\\WorkSpace\\.obsidian\\plugins\\project-verse';
 const filesToCopy = ['main.js', 'manifest.json', 'styles.css'];
 
 try {
