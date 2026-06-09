@@ -9,6 +9,8 @@ import {
   Menu,
   Modal,
   Setting,
+  MarkdownRenderer,
+  Component,
 } from "obsidian";
 import { SpaceManager } from "./spaceManager";
 import { ProjectSpace } from "./types";
@@ -101,6 +103,50 @@ class MemoModal extends Modal {
           .onChange(value => {
             this.text = value;
           });
+
+        text.inputEl.addEventListener("paste", async (e: ClipboardEvent) => {
+          const files = e.clipboardData?.files;
+          if (files && files.length > 0) {
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              if (file.type.startsWith("image/")) {
+                e.preventDefault(); // Stop default paste text behavior
+
+                try {
+                  const arrayBuffer = await file.arrayBuffer();
+                  const extension = file.name.split(".").pop() || "png";
+                  const filename = `paste-${Date.now()}.${extension}`;
+                  const folderPath = "attachments";
+
+                  // Ensure folder exists
+                  if (!this.app.vault.getAbstractFileByPath(folderPath)) {
+                    await this.app.vault.createFolder(folderPath);
+                  }
+
+                  const filePath = `${folderPath}/${filename}`;
+                  const tFile = await this.app.vault.createBinary(filePath, arrayBuffer);
+                  const linkText = `![[${tFile.path}]]`;
+
+                  const textarea = text.inputEl;
+                  const startPos = textarea.selectionStart;
+                  const endPos = textarea.selectionEnd;
+                  const currentText = textarea.value;
+
+                  const newText = currentText.substring(0, startPos) + linkText + currentText.substring(endPos);
+                  textarea.value = newText;
+                  this.text = newText;
+                  text.setValue(newText);
+
+                  textarea.focus();
+                  textarea.setSelectionRange(startPos + linkText.length, startPos + linkText.length);
+                } catch (error: any) {
+                  console.error("Failed to save pasted image:", error);
+                  new Notice("粘贴图片保存失败：" + (error instanceof Error ? error.message : String(error)));
+                }
+              }
+            }
+          }
+        });
       });
 
     new Setting(contentEl)
@@ -120,6 +166,38 @@ class MemoModal extends Modal {
           this.close();
         })
       );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+class MemoPreviewModal extends Modal {
+  private text: string;
+  private resolveImageLinks: (markdown: string) => string;
+  private component: Component;
+
+  constructor(app: App, text: string, resolveImageLinks: (markdown: string) => string, component: Component) {
+    super(app);
+    this.text = text;
+    this.resolveImageLinks = resolveImageLinks;
+    this.component = component;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+
+    // Style modal window
+    this.modalEl.style.width = "95vw";
+    this.modalEl.style.maxHeight = "95vh";
+
+    const container = contentEl.createDiv({ cls: "vps-memo-preview-container" });
+    container.style.cssText = "padding: 10px; overflow-y: auto; max-height: calc(80vh - 80px);";
+
+    const resolvedMarkdown = this.resolveImageLinks(this.text);
+    MarkdownRenderer.renderMarkdown(resolvedMarkdown, container, "", this.component);
   }
 
   onClose() {
@@ -479,6 +557,10 @@ export class SpaceDashboardView extends ItemView {
               .onClick(async () => {
                 const currentSpace = this.spaceManager.getSpace(this.spaceId!);
                 if (currentSpace && currentSpace.memos) {
+                  const targetMemo = currentSpace.memos.find(m => m.id === memoId);
+                  if (targetMemo) {
+                    await this.deleteMemoAttachments(targetMemo.text);
+                  }
                   currentSpace.memos = currentSpace.memos.filter(m => m.id !== memoId);
                   await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
                 }
@@ -513,7 +595,17 @@ export class SpaceDashboardView extends ItemView {
 
         const memoContent = memoItem.createDiv({
           cls: "vps-memo-text",
-          text: memo.text,
+        });
+        const resolvedMarkdown = this.resolveImageLinks(memo.text);
+        MarkdownRenderer.renderMarkdown(resolvedMarkdown, memoContent, "", this);
+
+        // Click on image inside memo text to preview
+        memoContent.addEventListener("click", (e) => {
+          const target = e.target as HTMLElement;
+          if (target.tagName === "IMG") {
+            e.stopPropagation();
+            new MemoPreviewModal(this.app, memo.text, this.resolveImageLinks.bind(this), this).open();
+          }
         });
 
         // Double click text to edit
@@ -545,6 +637,16 @@ export class SpaceDashboardView extends ItemView {
           cls: "vps-memo-actions",
         });
 
+        const previewBtn = memoItemActions.createEl("span", {
+          cls: "vps-memo-action-btn preview-btn",
+          title: "预览"
+        });
+        setIcon(previewBtn, "expand");
+        previewBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          new MemoPreviewModal(this.app, memo.text, this.resolveImageLinks.bind(this), this).open();
+        });
+
         const editBtn = memoItemActions.createEl("span", {
           cls: "vps-memo-action-btn edit-btn",
           title: "编辑"
@@ -574,6 +676,10 @@ export class SpaceDashboardView extends ItemView {
           e.stopPropagation();
           const currentSpace = this.spaceManager.getSpace(this.spaceId!);
           if (currentSpace && currentSpace.memos) {
+            const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
+            if (targetMemo) {
+              await this.deleteMemoAttachments(targetMemo.text);
+            }
             currentSpace.memos = currentSpace.memos.filter(m => m.id !== memo.id);
             await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
           }
@@ -688,6 +794,71 @@ export class SpaceDashboardView extends ItemView {
     const g = parseInt(hex.substring(3, 5), 16);
     const b = parseInt(hex.substring(5, 7), 16);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  private resolveImageLinks(markdown: string): string {
+    const wikiRegex = /!\[\[([^\]]+)\]\]/g;
+    let resolved = markdown.replace(wikiRegex, (match, content) => {
+      const parts = content.split("|");
+      const linkpath = parts[0].trim();
+      const width = parts[1] ? parts[1].trim() : "";
+
+      const file = this.app.vault.getAbstractFileByPath(linkpath) || 
+                   this.app.metadataCache.getFirstLinkpathDest(linkpath, "");
+      if (file instanceof TFile) {
+        const resourcePath = this.app.vault.getResourcePath(file);
+        if (width) {
+          return `<img src="${resourcePath}" width="${width}" />`;
+        }
+        return `![image](${resourcePath})`;
+      }
+      return match;
+    });
+
+    const mdRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    resolved = resolved.replace(mdRegex, (match, alt, href) => {
+      if (/^(https?|app|data):/i.test(href)) {
+        return match;
+      }
+      const file = this.app.vault.getAbstractFileByPath(href) || 
+                   this.app.metadataCache.getFirstLinkpathDest(href, "");
+      if (file instanceof TFile) {
+        return `![${alt}](${this.app.vault.getResourcePath(file)})`;
+      }
+      return match;
+    });
+
+    return resolved;
+  }
+
+  private async deleteMemoAttachments(text: string) {
+    const wikiRegex = /!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+    const mdRegex = /!\[[^\]]*\]\(([^)]+)\)/g;
+    const paths: string[] = [];
+    let match;
+
+    while ((match = wikiRegex.exec(text)) !== null) {
+      paths.push(match[1].trim());
+    }
+    while ((match = mdRegex.exec(text)) !== null) {
+      const href = match[1].trim();
+      if (!/^(https?|app|data):/i.test(href)) {
+        paths.push(href);
+      }
+    }
+
+    for (const path of paths) {
+      if (path.startsWith("attachments/paste-")) {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (file instanceof TFile) {
+          try {
+            await this.app.vault.delete(file);
+          } catch (err) {
+            console.error("Failed to delete attachment file:", path, err);
+          }
+        }
+      }
+    }
   }
 
   private getJSTTimestamp(date: Date = new Date()): string {

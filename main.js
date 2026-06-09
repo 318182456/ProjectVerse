@@ -1412,6 +1412,42 @@ var MemoModal = class extends import_obsidian4.Modal {
       text.setValue(this.text).setPlaceholder("\u8BF7\u8F93\u5165\u5907\u5FD8\u4E8B\u9879\u5185\u5BB9").onChange((value) => {
         this.text = value;
       });
+      text.inputEl.addEventListener("paste", async (e) => {
+        const files = e.clipboardData?.files;
+        if (files && files.length > 0) {
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (file.type.startsWith("image/")) {
+              e.preventDefault();
+              try {
+                const arrayBuffer = await file.arrayBuffer();
+                const extension = file.name.split(".").pop() || "png";
+                const filename = `paste-${Date.now()}.${extension}`;
+                const folderPath = "attachments";
+                if (!this.app.vault.getAbstractFileByPath(folderPath)) {
+                  await this.app.vault.createFolder(folderPath);
+                }
+                const filePath = `${folderPath}/${filename}`;
+                const tFile = await this.app.vault.createBinary(filePath, arrayBuffer);
+                const linkText = `![[${tFile.path}]]`;
+                const textarea = text.inputEl;
+                const startPos = textarea.selectionStart;
+                const endPos = textarea.selectionEnd;
+                const currentText = textarea.value;
+                const newText = currentText.substring(0, startPos) + linkText + currentText.substring(endPos);
+                textarea.value = newText;
+                this.text = newText;
+                text.setValue(newText);
+                textarea.focus();
+                textarea.setSelectionRange(startPos + linkText.length, startPos + linkText.length);
+              } catch (error) {
+                console.error("Failed to save pasted image:", error);
+                new import_obsidian4.Notice("\u7C98\u8D34\u56FE\u7247\u4FDD\u5B58\u5931\u8D25\uFF1A" + (error instanceof Error ? error.message : String(error)));
+              }
+            }
+          }
+        }
+      });
     });
     new import_obsidian4.Setting(contentEl).addButton(
       (btn) => btn.setButtonText(this.buttonText).setCta().onClick(() => {
@@ -1425,6 +1461,27 @@ var MemoModal = class extends import_obsidian4.Modal {
         this.close();
       })
     );
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+var MemoPreviewModal = class extends import_obsidian4.Modal {
+  constructor(app, text, resolveImageLinks, component) {
+    super(app);
+    this.text = text;
+    this.resolveImageLinks = resolveImageLinks;
+    this.component = component;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    this.modalEl.style.width = "95vw";
+    this.modalEl.style.maxHeight = "95vh";
+    const container = contentEl.createDiv({ cls: "vps-memo-preview-container" });
+    container.style.cssText = "padding: 10px; overflow-y: auto; max-height: calc(80vh - 80px);";
+    const resolvedMarkdown = this.resolveImageLinks(this.text);
+    import_obsidian4.MarkdownRenderer.renderMarkdown(resolvedMarkdown, container, "", this.component);
   }
   onClose() {
     this.contentEl.empty();
@@ -1709,6 +1766,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
             item.setTitle("\u5220\u9664\u5907\u5FD8").setIcon("trash").onClick(async () => {
               const currentSpace = this.spaceManager.getSpace(this.spaceId);
               if (currentSpace && currentSpace.memos) {
+                const targetMemo = currentSpace.memos.find((m) => m.id === memoId);
+                if (targetMemo) {
+                  await this.deleteMemoAttachments(targetMemo.text);
+                }
                 currentSpace.memos = currentSpace.memos.filter((m) => m.id !== memoId);
                 await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
               }
@@ -1737,8 +1798,16 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         });
         memoItem.setAttribute("data-memo-id", memo.id);
         const memoContent = memoItem.createDiv({
-          cls: "vps-memo-text",
-          text: memo.text
+          cls: "vps-memo-text"
+        });
+        const resolvedMarkdown = this.resolveImageLinks(memo.text);
+        import_obsidian4.MarkdownRenderer.renderMarkdown(resolvedMarkdown, memoContent, "", this);
+        memoContent.addEventListener("click", (e) => {
+          const target = e.target;
+          if (target.tagName === "IMG") {
+            e.stopPropagation();
+            new MemoPreviewModal(this.app, memo.text, this.resolveImageLinks.bind(this), this).open();
+          }
         });
         memoContent.addEventListener("dblclick", (e) => {
           e.stopPropagation();
@@ -1763,6 +1832,15 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         });
         const memoItemActions = memoFooter.createDiv({
           cls: "vps-memo-actions"
+        });
+        const previewBtn = memoItemActions.createEl("span", {
+          cls: "vps-memo-action-btn preview-btn",
+          title: "\u9884\u89C8"
+        });
+        (0, import_obsidian4.setIcon)(previewBtn, "expand");
+        previewBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          new MemoPreviewModal(this.app, memo.text, this.resolveImageLinks.bind(this), this).open();
         });
         const editBtn = memoItemActions.createEl("span", {
           cls: "vps-memo-action-btn edit-btn",
@@ -1792,6 +1870,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
           e.stopPropagation();
           const currentSpace = this.spaceManager.getSpace(this.spaceId);
           if (currentSpace && currentSpace.memos) {
+            const targetMemo = currentSpace.memos.find((m) => m.id === memo.id);
+            if (targetMemo) {
+              await this.deleteMemoAttachments(targetMemo.text);
+            }
             currentSpace.memos = currentSpace.memos.filter((m) => m.id !== memo.id);
             await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
           }
@@ -1882,6 +1964,62 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const g = parseInt(hex.substring(3, 5), 16);
     const b = parseInt(hex.substring(5, 7), 16);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  resolveImageLinks(markdown) {
+    const wikiRegex = /!\[\[([^\]]+)\]\]/g;
+    let resolved = markdown.replace(wikiRegex, (match, content) => {
+      const parts = content.split("|");
+      const linkpath = parts[0].trim();
+      const width = parts[1] ? parts[1].trim() : "";
+      const file = this.app.vault.getAbstractFileByPath(linkpath) || this.app.metadataCache.getFirstLinkpathDest(linkpath, "");
+      if (file instanceof import_obsidian4.TFile) {
+        const resourcePath = this.app.vault.getResourcePath(file);
+        if (width) {
+          return `<img src="${resourcePath}" width="${width}" />`;
+        }
+        return `![image](${resourcePath})`;
+      }
+      return match;
+    });
+    const mdRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    resolved = resolved.replace(mdRegex, (match, alt, href) => {
+      if (/^(https?|app|data):/i.test(href)) {
+        return match;
+      }
+      const file = this.app.vault.getAbstractFileByPath(href) || this.app.metadataCache.getFirstLinkpathDest(href, "");
+      if (file instanceof import_obsidian4.TFile) {
+        return `![${alt}](${this.app.vault.getResourcePath(file)})`;
+      }
+      return match;
+    });
+    return resolved;
+  }
+  async deleteMemoAttachments(text) {
+    const wikiRegex = /!\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+    const mdRegex = /!\[[^\]]*\]\(([^)]+)\)/g;
+    const paths = [];
+    let match;
+    while ((match = wikiRegex.exec(text)) !== null) {
+      paths.push(match[1].trim());
+    }
+    while ((match = mdRegex.exec(text)) !== null) {
+      const href = match[1].trim();
+      if (!/^(https?|app|data):/i.test(href)) {
+        paths.push(href);
+      }
+    }
+    for (const path of paths) {
+      if (path.startsWith("attachments/paste-")) {
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (file instanceof import_obsidian4.TFile) {
+          try {
+            await this.app.vault.delete(file);
+          } catch (err) {
+            console.error("Failed to delete attachment file:", path, err);
+          }
+        }
+      }
+    }
   }
   getJSTTimestamp(date = /* @__PURE__ */ new Date()) {
     return date.toLocaleString("ja-JP", {
