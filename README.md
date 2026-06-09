@@ -1,6 +1,49 @@
 # ProjectVerse — Obsidian Virtual Project Space Plugin
 
-[中文](#中文) | [日本語](#日本語)
+[English](#english) | [中文](#中文)
+
+---
+
+## English
+
+### 📌 Introduction
+**ProjectVerse** is a virtual project space management plugin built for Obsidian. It helps you manage projects through code and configuration, associating folders and files scattered across your vault, and automatically generating beautiful dashboards for each project, transforming Obsidian into your ultimate workspace.
+
+---
+
+### 🌟 Key Features
+- **Virtual Project Spaces**: Create, edit, and delete project spaces freely. Each space supports custom theme colors, icons, and non-intrusively links existing files and folders.
+- **Dedicated Project Explorer (Space Explorer)**: A dedicated sidebar view showing only the currently active project space and its associated directory tree, keeping you focused on the task at hand.
+- **Auto-generated Project Dashboard (Space Dashboard)**:
+  - **Stunning Banner Header**: Features a modern gradient header with custom icons.
+  - **Project Statistics**: Display key metrics such as total associated files, pending tasks, and association rules.
+  - **Task Scanner**: Automatically scans for Markdown checklist items (`- [ ]`) across all associated files. Check/uncheck them directly on the dashboard to update the source files.
+  - **Memo Area**: Keep project-specific memos and quick notes. Supports Markdown rendering, image attachments, editing, deletion, and data persistence.
+  - **Virtual File Tree & Quick Notes**: Browse project files in a virtual tree and create new notes under the project directory with one click.
+- **Workspace State Sync**: Automatically saves and restores open tabs when switching between project spaces, preserving your work context seamlessly.
+
+---
+
+### 🚀 Installation
+1. Go to the GitHub Releases page and download the latest release package `projectVerse-x.y.z.zip`.
+2. Extract the archive, and place the extracted `main.js`, `manifest.json`, and `styles.css` files into your Obsidian plugin directory:
+   `YourVault/.obsidian/plugins/projectVerse/`
+3. Open Obsidian, navigate to **Settings -> Community Plugins**, and enable **ProjectVerse**.
+
+---
+
+### 🛠️ Development & Build
+To build or customize the plugin locally:
+```bash
+# Install dependencies
+npm install
+
+# Start development mode with hot-reload
+npm run dev
+
+# Build for production
+npm run build
+```
 
 ---
 
@@ -18,6 +61,7 @@
   - **美观的 Banner 头部**：采用现代化渐变设计与自定义图标。
   - **项目数据统计**：展示关联文件总数、待办任务数、关联规则数等关键指标。
   - **任务扫描器 (Task Scanner)**：自动扫描项目关联文件中的 Markdown 任务列表（`- [ ]`），支持在 Dashboard 中直接点击勾选同步修改源文件。
+  - **备忘录区域 (Memo Area)**：记录与项目相关的备忘录和快速便签，支持 Markdown 渲染、图片附件、编辑、删除以及持久化存储。
   - **项目文件树与新建笔记**：在面板中以虚拟树的形式浏览文件，并支持一键在项目目录下快速新建笔记。
 - **工作区状态同步 (Workspace Sync)**：切换项目空间时，自动保存并还原上一次打开的标签页（Tabs），无缝衔接工作上下文。
 
@@ -41,47 +85,5 @@ npm install
 npm run dev
 
 # 编译打包生产版本
-npm run build
-```
-
----
-
-## 日本語
-
-### 📌 概要
-**ProjectVerse** は、Obsidian 向けに開発された仮想プロジェクトスペース管理プラグインです。コードと設定ベースのアプローチでプロジェクトを管理し、保管庫内の異なる場所にあるファイルやフォルダを関連付けます。プロジェクトごとに美しいダッシュボードを自動生成し、Obsidian を強力なワークスペースへと進化させます。
-
----
-
-### 🌟 主な機能
-- **仮想プロジェクトスペース (Virtual Project Spaces)**：プロジェクトスペースを自由に作成、編集、削除できます。各スペースはカスタムテーマカラーとアイコンに対応しており、既存のファイルやフォルダを非破壊的に関連付けることが可能です。
-- **専用プロジェクトエクスプローラー (Space Explorer)**：専用のサイドバービューを提供し、現在アクティブなプロジェクトスペースと関連するディレクトリツリー構造のみを表示します。
-- **自動プロジェクトダッシュボード (Space Dashboard)**：
-  - **美しいバナーヘッダー**：モダンなグラデーションとカスタムアイコンを採用しています。
-  - **プロジェクト統計**：関連ファイル総数、未完了タスク数、関連ルール数などの重要な指標を表示します。
-  - **タスクスキャナー (Task Scanner)**：プロジェクト内のファイルから Markdown タスクリスト（`- [ ]`）を自動的にスキャンします。ダッシュボード上でチェックボックスを操作すると、元のファイルも直接更新されます。
-  - **ファイルツリーと新規ノート作成**：ダッシュボード上で仮想ツリー形式でファイルをブラウズし、ワンクリックでプロジェクトフォルダ内に新規ノートを作成できます。
-- **ワークスペース同期 (Workspace Sync)**：プロジェクトスペースを切り替える際、前回開いていたタブ（Tabs）の状態を自動的に保存・復元し、シームレスに作業を再開できます。
-
----
-
-### 🚀 インストール方法
-1. GitHub Releases ページから最新のリリースパッケージ `projectVerse-x.y.z.zip` をダウンロードしてください。
-2. 圧縮ファイルを解凍し、含まれる `main.js`、`manifest.json`、`styles.css` ファイルを Obsidian 保管庫の以下のディレクトリに配置します：
-   `YourVault/.obsidian/plugins/projectVerse/`
-3. Obsidian を起動し、**設定 -> コミュニティプラグイン** にて **ProjectVerse** を有効にしてください。
-
----
-
-### 🛠️ 開発とビルド
-プラグインのカスタマイズや開発を行う場合は、以下のコマンドを使用してください：
-```bash
-# 依存関係のインストール
-npm install
-
-# ホットリロード開発モードの起動
-npm run dev
-
-# プロダクションビルドの作成
 npm run build
 ```
