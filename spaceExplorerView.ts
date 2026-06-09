@@ -1,6 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon, TFile, TFolder, Menu, normalizePath, Notice, Modal, Setting, App } from 'obsidian';
 import { SpaceManager } from './spaceManager';
-import { ProjectSpace } from './types';
 import { SpaceModal } from './spaceModal';
 
 export const VIEW_TYPE_SPACE_EXPLORER = 'virtual-project-space-explorer';
@@ -999,7 +998,7 @@ export class SpaceExplorerView extends ItemView {
           this.selectedIsFolder = false;
           this.render();
           if (childNode.file) {
-            this.app.workspace.getLeaf(e.ctrlKey || e.metaKey).openFile(childNode.file);
+            void this.app.workspace.getLeaf(e.ctrlKey || e.metaKey).openFile(childNode.file);
           }
         });
       }
@@ -1059,7 +1058,7 @@ interface ConfirmButtonOption<T> {
   value: T;
 }
 
-export class CustomConfirmModal<T = any> extends Modal {
+export class CustomConfirmModal<T = unknown> extends Modal {
   private titleText: string;
   private message: string;
   private buttons: ConfirmButtonOption<T>[];

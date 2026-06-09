@@ -1256,7 +1256,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
           this.selectedIsFolder = false;
           this.render();
           if (childNode.file) {
-            this.app.workspace.getLeaf(e.ctrlKey || e.metaKey).openFile(childNode.file);
+            void this.app.workspace.getLeaf(e.ctrlKey || e.metaKey).openFile(childNode.file);
           }
         });
       }
