@@ -69,7 +69,7 @@ export class SpaceManager {
     if (!source) return undefined;
 
     const newSpace: ProjectSpace = {
-      ...JSON.parse(JSON.stringify(source)),
+      ...(JSON.parse(JSON.stringify(source)) as ProjectSpace),
       id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
       name: `${source.name} Copy`,
       createdAt: new Date().toISOString().split('T')[0]
@@ -248,10 +248,13 @@ export class SpaceManager {
         } else {
           // Fallback: check if the file's cache contains a 'space' property matching the space name
           const cache = this.app.metadataCache.getFileCache(file);
-          if (cache && cache.frontmatter) {
-            const spaceName = cache.frontmatter.space || cache.frontmatter.projectSpace;
-            if (spaceName && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
-              matchedFiles.add(file);
+          if (cache) {
+            const frontmatter = cache.frontmatter as Record<string, unknown>;
+            if (frontmatter) {
+              const spaceName = frontmatter.space || frontmatter.projectSpace;
+              if (spaceName && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
+                matchedFiles.add(file);
+              }
             }
           }
         }
@@ -329,8 +332,9 @@ export class SpaceManager {
     const tags = new Set<string>();
     
     // Frontmatter tags
-    if (cache.frontmatter) {
-      const fmTags = cache.frontmatter.tags || cache.frontmatter.tag;
+    const frontmatter = cache.frontmatter as Record<string, unknown>;
+    if (frontmatter) {
+      const fmTags = frontmatter.tags || frontmatter.tag;
       if (Array.isArray(fmTags)) {
         fmTags.forEach(t => tags.add(String(t).replace('#', '').toLowerCase().trim()));
       } else if (typeof fmTags === 'string') {

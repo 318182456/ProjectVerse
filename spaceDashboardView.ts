@@ -236,11 +236,11 @@ export class SpaceDashboardView extends ItemView {
 
   setSpaceId(spaceId: string) {
     this.spaceId = spaceId;
-    this.render();
+    void this.render();
   }
 
   async onOpen() {
-    this.render();
+    void this.render();
   }
 
   async render() {
@@ -260,7 +260,7 @@ export class SpaceDashboardView extends ItemView {
 
     if (!targetId) {
       container.empty();
-      const d = container.createDiv({
+      container.createDiv({
         text: "请在侧边栏选择并激活一个项目空间以加载 Dashboard。",
         cls: "vps-space-meta vps-dashboard-empty-state",
       });
@@ -270,7 +270,7 @@ export class SpaceDashboardView extends ItemView {
     const space = this.spaceManager.getSpace(targetId);
     if (!space) {
       container.empty();
-      const d = container.createDiv({
+      container.createDiv({
         text: "未找到选定的项目空间。",
         cls: "vps-space-meta vps-dashboard-empty-state",
       });
@@ -365,10 +365,12 @@ export class SpaceDashboardView extends ItemView {
     hideCompletedCheckbox.checked = this.hideCompleted;
     hideCompletedLabel.createSpan({ text: "隐藏已完成" });
 
-    hideCompletedCheckbox.addEventListener("change", async () => {
+    hideCompletedCheckbox.addEventListener("change", () => {
       this.hideCompleted = hideCompletedCheckbox.checked;
-      await this.spaceManager.updateSpace(space.id, { hideCompletedTasks: this.hideCompleted });
-      this.render();
+      void (async () => {
+        await this.spaceManager.updateSpace(space.id, { hideCompletedTasks: this.hideCompleted });
+        void this.render();
+      })();
     });
 
     const tasksList = tasksCard.createDiv({ cls: "vps-tasks-list" });
@@ -381,17 +383,19 @@ export class SpaceDashboardView extends ItemView {
         item.setTitle("添加待办任务")
           .setIcon("plus")
           .onClick(() => {
-            new TodoModal(this.app, async (text) => {
-              const currentSpace = this.spaceManager.getSpace(this.spaceId!);
-              if (currentSpace) {
-                if (!currentSpace.tasks) currentSpace.tasks = [];
-                currentSpace.tasks.push({
-                  id: Math.random().toString(36).substring(2, 11),
-                  text,
-                  completed: false
-                });
-                await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
-              }
+            new TodoModal(this.app, (text) => {
+              void (async () => {
+                const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+                if (currentSpace) {
+                  if (!currentSpace.tasks) currentSpace.tasks = [];
+                  currentSpace.tasks.push({
+                    id: Math.random().toString(36).substring(2, 11),
+                    text,
+                    completed: false
+                  });
+                  await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
+                }
+              })();
             }).open();
           });
       });
@@ -405,12 +409,14 @@ export class SpaceDashboardView extends ItemView {
           menu.addItem((item) => {
             item.setTitle("删除待办任务")
               .setIcon("trash")
-              .onClick(async () => {
-                const currentSpace = this.spaceManager.getSpace(this.spaceId!);
-                if (currentSpace && currentSpace.tasks) {
-                  currentSpace.tasks = currentSpace.tasks.filter(t => t.id !== taskId);
-                  await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
-                }
+              .onClick(() => {
+                void (async () => {
+                  const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+                  if (currentSpace && currentSpace.tasks) {
+                    currentSpace.tasks = currentSpace.tasks.filter(t => t.id !== taskId);
+                    await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
+                  }
+                })();
               });
           });
         }
@@ -445,19 +451,23 @@ export class SpaceDashboardView extends ItemView {
           type: "checkbox",
         });
         checkbox.checked = task.completed;
-        checkbox.addEventListener("change", async () => {
-          await this.toggleTaskCompletion(task);
-          this.render(); // Re-render to show updated state
+        checkbox.addEventListener("change", () => {
+          void (async () => {
+            await this.toggleTaskCompletion(task);
+            void this.render(); // Re-render to show updated state
+          })();
         });
 
         const taskText = taskRow.createDiv({
           cls: "vps-task-text",
           text: task.text,
         });
-        taskText.addEventListener("click", async () => {
+        taskText.addEventListener("click", () => {
           checkbox.checked = !checkbox.checked;
-          await this.toggleTaskCompletion(task);
-          this.render();
+          void (async () => {
+            await this.toggleTaskCompletion(task);
+            void this.render();
+          })();
         });
 
         taskRow.createDiv({
@@ -489,17 +499,19 @@ export class SpaceDashboardView extends ItemView {
     setIcon(addMemoBtn, "plus");
 
     const openAddMemoModal = () => {
-      new MemoModal(this.app, "添加备忘录", "添加", "", async (text) => {
-        const currentSpace = this.spaceManager.getSpace(this.spaceId!);
-        if (currentSpace) {
-          if (!currentSpace.memos) currentSpace.memos = [];
-          currentSpace.memos.push({
-            id: Math.random().toString(36).substring(2, 11),
-            text,
-            updatedAt: this.getJSTTimestamp()
-          });
-          await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
-        }
+      new MemoModal(this.app, "添加备忘录", "添加", "", (text) => {
+        void (async () => {
+          const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+          if (currentSpace) {
+            if (!currentSpace.memos) currentSpace.memos = [];
+            currentSpace.memos.push({
+              id: Math.random().toString(36).substring(2, 11),
+              text,
+              updatedAt: this.getJSTTimestamp()
+            });
+            await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+          }
+        })();
       }).open();
     };
 
@@ -535,10 +547,12 @@ export class SpaceDashboardView extends ItemView {
                 const currentSpace = this.spaceManager.getSpace(this.spaceId!);
                 const memo = currentSpace?.memos?.find(m => m.id === memoId);
                 if (memo) {
-                  new MemoModal(this.app, "修改备忘录", "保存", memo.text, async (newText) => {
-                    memo.text = newText;
-                    memo.updatedAt = this.getJSTTimestamp();
-                    await this.spaceManager.updateSpace(currentSpace!.id, { memos: currentSpace!.memos });
+                  new MemoModal(this.app, "修改备忘录", "保存", memo.text, (newText) => {
+                    void (async () => {
+                      memo.text = newText;
+                      memo.updatedAt = this.getJSTTimestamp();
+                      await this.spaceManager.updateSpace(currentSpace!.id, { memos: currentSpace!.memos });
+                    })();
                   }).open();
                 }
               });
@@ -546,16 +560,18 @@ export class SpaceDashboardView extends ItemView {
           menu.addItem((item) => {
             item.setTitle("删除备忘")
               .setIcon("trash")
-              .onClick(async () => {
-                const currentSpace = this.spaceManager.getSpace(this.spaceId!);
-                if (currentSpace && currentSpace.memos) {
-                  const targetMemo = currentSpace.memos.find(m => m.id === memoId);
-                  if (targetMemo) {
-                    await this.deleteMemoAttachments(targetMemo.text);
+              .onClick(() => {
+                void (async () => {
+                  const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+                  if (currentSpace && currentSpace.memos) {
+                    const targetMemo = currentSpace.memos.find(m => m.id === memoId);
+                    if (targetMemo) {
+                      await this.deleteMemoAttachments(targetMemo.text);
+                    }
+                    currentSpace.memos = currentSpace.memos.filter(m => m.id !== memoId);
+                    await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
                   }
-                  currentSpace.memos = currentSpace.memos.filter(m => m.id !== memoId);
-                  await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
-                }
+                })();
               });
           });
         }
@@ -603,16 +619,18 @@ export class SpaceDashboardView extends ItemView {
         // Double click text to edit
         memoContent.addEventListener("dblclick", (e) => {
           e.stopPropagation();
-          new MemoModal(this.app, "修改备忘录", "保存", memo.text, async (newText) => {
-            const currentSpace = this.spaceManager.getSpace(this.spaceId!);
-            if (currentSpace && currentSpace.memos) {
-              const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
-              if (targetMemo) {
-                targetMemo.text = newText;
-                targetMemo.updatedAt = this.getJSTTimestamp();
-                await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+          new MemoModal(this.app, "修改备忘录", "保存", memo.text, (newText) => {
+            void (async () => {
+              const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+              if (currentSpace && currentSpace.memos) {
+                const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
+                if (targetMemo) {
+                  targetMemo.text = newText;
+                  targetMemo.updatedAt = this.getJSTTimestamp();
+                  await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+                }
               }
-            }
+            })();
           }).open();
         });
 
@@ -646,16 +664,18 @@ export class SpaceDashboardView extends ItemView {
         setIcon(editBtn, "pencil");
         editBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          new MemoModal(this.app, "修改备忘录", "保存", memo.text, async (newText) => {
-            const currentSpace = this.spaceManager.getSpace(this.spaceId!);
-            if (currentSpace && currentSpace.memos) {
-              const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
-              if (targetMemo) {
-                targetMemo.text = newText;
-                targetMemo.updatedAt = this.getJSTTimestamp();
-                await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+          new MemoModal(this.app, "修改备忘录", "保存", memo.text, (newText) => {
+            void (async () => {
+              const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+              if (currentSpace && currentSpace.memos) {
+                const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
+                if (targetMemo) {
+                  targetMemo.text = newText;
+                  targetMemo.updatedAt = this.getJSTTimestamp();
+                  await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+                }
               }
-            }
+            })();
           }).open();
         });
 
@@ -664,17 +684,19 @@ export class SpaceDashboardView extends ItemView {
           title: "删除"
         });
         setIcon(deleteBtn, "trash");
-        deleteBtn.addEventListener("click", async (e) => {
+        deleteBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          const currentSpace = this.spaceManager.getSpace(this.spaceId!);
-          if (currentSpace && currentSpace.memos) {
-            const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
-            if (targetMemo) {
-              await this.deleteMemoAttachments(targetMemo.text);
+          void (async () => {
+            const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+            if (currentSpace && currentSpace.memos) {
+              const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
+              if (targetMemo) {
+                await this.deleteMemoAttachments(targetMemo.text);
+              }
+              currentSpace.memos = currentSpace.memos.filter(m => m.id !== memo.id);
+              await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
             }
-            currentSpace.memos = currentSpace.memos.filter(m => m.id !== memo.id);
-            await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
-          }
+          })();
         });
       });
     }
@@ -790,7 +812,7 @@ export class SpaceDashboardView extends ItemView {
 
   private resolveImageLinks(markdown: string): string {
     const wikiRegex = /!\[\[([^\]]+)\]\]/g;
-    let resolved = markdown.replace(wikiRegex, (match, content) => {
+    let resolved = markdown.replace(wikiRegex, (match: string, content: string) => {
       const parts = content.split("|");
       const linkpath = parts[0].trim();
       const width = parts[1] ? parts[1].trim() : "";
@@ -808,7 +830,7 @@ export class SpaceDashboardView extends ItemView {
     });
 
     const mdRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
-    resolved = resolved.replace(mdRegex, (match, alt, href) => {
+    resolved = resolved.replace(mdRegex, (match: string, alt: string, href: string) => {
       if (/^(https?|app|data):/i.test(href)) {
         return match;
       }

@@ -241,10 +241,13 @@ var SpaceManager = class {
           matchedFiles.add(file);
         } else {
           const cache = this.app.metadataCache.getFileCache(file);
-          if (cache && cache.frontmatter) {
-            const spaceName = cache.frontmatter.space || cache.frontmatter.projectSpace;
-            if (spaceName && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
-              matchedFiles.add(file);
+          if (cache) {
+            const frontmatter = cache.frontmatter;
+            if (frontmatter) {
+              const spaceName = frontmatter.space || frontmatter.projectSpace;
+              if (spaceName && String(spaceName).toLowerCase() === space.name.toLowerCase()) {
+                matchedFiles.add(file);
+              }
             }
           }
         }
@@ -309,8 +312,9 @@ var SpaceManager = class {
     if (!cache)
       return [];
     const tags = /* @__PURE__ */ new Set();
-    if (cache.frontmatter) {
-      const fmTags = cache.frontmatter.tags || cache.frontmatter.tag;
+    const frontmatter = cache.frontmatter;
+    if (frontmatter) {
+      const fmTags = frontmatter.tags || frontmatter.tag;
       if (Array.isArray(fmTags)) {
         fmTags.forEach((t) => tags.add(String(t).replace("#", "").toLowerCase().trim()));
       } else if (typeof fmTags === "string") {
@@ -791,7 +795,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
         const files = this.spaceManager.getSpaceFiles(activeSpaceId);
         const folders = this.spaceManager.getSpaceFolders(activeSpaceId);
         if (files.length === 0 && folders.length === 0) {
-          const d = treeContainer.createDiv({
+          treeContainer.createDiv({
             text: '\u8BE5\u7A7A\u95F4\u6682\u65E0\u5173\u8054\u6587\u4EF6\u3002\u53F3\u952E\u6587\u4EF6\u5217\u8868\u9009\u62E9 "Add to Space" \u52A0\u5165\u3002',
             cls: "vps-space-meta vps-space-meta-padding"
           });
@@ -1499,10 +1503,10 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
   }
   setSpaceId(spaceId) {
     this.spaceId = spaceId;
-    this.render();
+    void this.render();
   }
   async onOpen() {
-    this.render();
+    void this.render();
   }
   async render() {
     const activeSpaceId = this.app.plugins?.plugins?.["project-verse"]?.settings?.activeSpaceId;
@@ -1517,7 +1521,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const container = this.contentEl;
     if (!targetId) {
       container.empty();
-      const d = container.createDiv({
+      container.createDiv({
         text: "\u8BF7\u5728\u4FA7\u8FB9\u680F\u9009\u62E9\u5E76\u6FC0\u6D3B\u4E00\u4E2A\u9879\u76EE\u7A7A\u95F4\u4EE5\u52A0\u8F7D Dashboard\u3002",
         cls: "vps-space-meta vps-dashboard-empty-state"
       });
@@ -1526,7 +1530,7 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const space = this.spaceManager.getSpace(targetId);
     if (!space) {
       container.empty();
-      const d = container.createDiv({
+      container.createDiv({
         text: "\u672A\u627E\u5230\u9009\u5B9A\u7684\u9879\u76EE\u7A7A\u95F4\u3002",
         cls: "vps-space-meta vps-dashboard-empty-state"
       });
@@ -1593,10 +1597,12 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     });
     hideCompletedCheckbox.checked = this.hideCompleted;
     hideCompletedLabel.createSpan({ text: "\u9690\u85CF\u5DF2\u5B8C\u6210" });
-    hideCompletedCheckbox.addEventListener("change", async () => {
+    hideCompletedCheckbox.addEventListener("change", () => {
       this.hideCompleted = hideCompletedCheckbox.checked;
-      await this.spaceManager.updateSpace(space.id, { hideCompletedTasks: this.hideCompleted });
-      this.render();
+      void (async () => {
+        await this.spaceManager.updateSpace(space.id, { hideCompletedTasks: this.hideCompleted });
+        void this.render();
+      })();
     });
     const tasksList = tasksCard.createDiv({ cls: "vps-tasks-list" });
     tasksCard.addEventListener("contextmenu", (event) => {
@@ -1604,18 +1610,20 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       const menu = new import_obsidian4.Menu();
       menu.addItem((item) => {
         item.setTitle("\u6DFB\u52A0\u5F85\u529E\u4EFB\u52A1").setIcon("plus").onClick(() => {
-          new TodoModal(this.app, async (text) => {
-            const currentSpace = this.spaceManager.getSpace(this.spaceId);
-            if (currentSpace) {
-              if (!currentSpace.tasks)
-                currentSpace.tasks = [];
-              currentSpace.tasks.push({
-                id: Math.random().toString(36).substring(2, 11),
-                text,
-                completed: false
-              });
-              await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
-            }
+          new TodoModal(this.app, (text) => {
+            void (async () => {
+              const currentSpace = this.spaceManager.getSpace(this.spaceId);
+              if (currentSpace) {
+                if (!currentSpace.tasks)
+                  currentSpace.tasks = [];
+                currentSpace.tasks.push({
+                  id: Math.random().toString(36).substring(2, 11),
+                  text,
+                  completed: false
+                });
+                await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
+              }
+            })();
           }).open();
         });
       });
@@ -1626,12 +1634,14 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         if (taskId) {
           menu.addSeparator();
           menu.addItem((item) => {
-            item.setTitle("\u5220\u9664\u5F85\u529E\u4EFB\u52A1").setIcon("trash").onClick(async () => {
-              const currentSpace = this.spaceManager.getSpace(this.spaceId);
-              if (currentSpace && currentSpace.tasks) {
-                currentSpace.tasks = currentSpace.tasks.filter((t) => t.id !== taskId);
-                await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
-              }
+            item.setTitle("\u5220\u9664\u5F85\u529E\u4EFB\u52A1").setIcon("trash").onClick(() => {
+              void (async () => {
+                const currentSpace = this.spaceManager.getSpace(this.spaceId);
+                if (currentSpace && currentSpace.tasks) {
+                  currentSpace.tasks = currentSpace.tasks.filter((t) => t.id !== taskId);
+                  await this.spaceManager.updateSpace(currentSpace.id, { tasks: currentSpace.tasks });
+                }
+              })();
             });
           });
         }
@@ -1657,18 +1667,22 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
           type: "checkbox"
         });
         checkbox.checked = task.completed;
-        checkbox.addEventListener("change", async () => {
-          await this.toggleTaskCompletion(task);
-          this.render();
+        checkbox.addEventListener("change", () => {
+          void (async () => {
+            await this.toggleTaskCompletion(task);
+            void this.render();
+          })();
         });
         const taskText = taskRow.createDiv({
           cls: "vps-task-text",
           text: task.text
         });
-        taskText.addEventListener("click", async () => {
+        taskText.addEventListener("click", () => {
           checkbox.checked = !checkbox.checked;
-          await this.toggleTaskCompletion(task);
-          this.render();
+          void (async () => {
+            await this.toggleTaskCompletion(task);
+            void this.render();
+          })();
         });
         taskRow.createDiv({
           cls: "vps-task-source",
@@ -1694,18 +1708,20 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     });
     (0, import_obsidian4.setIcon)(addMemoBtn, "plus");
     const openAddMemoModal = () => {
-      new MemoModal(this.app, "\u6DFB\u52A0\u5907\u5FD8\u5F55", "\u6DFB\u52A0", "", async (text) => {
-        const currentSpace = this.spaceManager.getSpace(this.spaceId);
-        if (currentSpace) {
-          if (!currentSpace.memos)
-            currentSpace.memos = [];
-          currentSpace.memos.push({
-            id: Math.random().toString(36).substring(2, 11),
-            text,
-            updatedAt: this.getJSTTimestamp()
-          });
-          await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
-        }
+      new MemoModal(this.app, "\u6DFB\u52A0\u5907\u5FD8\u5F55", "\u6DFB\u52A0", "", (text) => {
+        void (async () => {
+          const currentSpace = this.spaceManager.getSpace(this.spaceId);
+          if (currentSpace) {
+            if (!currentSpace.memos)
+              currentSpace.memos = [];
+            currentSpace.memos.push({
+              id: Math.random().toString(36).substring(2, 11),
+              text,
+              updatedAt: this.getJSTTimestamp()
+            });
+            await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+          }
+        })();
       }).open();
     };
     addMemoBtn.addEventListener("click", (e) => {
@@ -1732,25 +1748,29 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
               const currentSpace = this.spaceManager.getSpace(this.spaceId);
               const memo = currentSpace?.memos?.find((m) => m.id === memoId);
               if (memo) {
-                new MemoModal(this.app, "\u4FEE\u6539\u5907\u5FD8\u5F55", "\u4FDD\u5B58", memo.text, async (newText) => {
-                  memo.text = newText;
-                  memo.updatedAt = this.getJSTTimestamp();
-                  await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+                new MemoModal(this.app, "\u4FEE\u6539\u5907\u5FD8\u5F55", "\u4FDD\u5B58", memo.text, (newText) => {
+                  void (async () => {
+                    memo.text = newText;
+                    memo.updatedAt = this.getJSTTimestamp();
+                    await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+                  })();
                 }).open();
               }
             });
           });
           menu.addItem((item) => {
-            item.setTitle("\u5220\u9664\u5907\u5FD8").setIcon("trash").onClick(async () => {
-              const currentSpace = this.spaceManager.getSpace(this.spaceId);
-              if (currentSpace && currentSpace.memos) {
-                const targetMemo = currentSpace.memos.find((m) => m.id === memoId);
-                if (targetMemo) {
-                  await this.deleteMemoAttachments(targetMemo.text);
+            item.setTitle("\u5220\u9664\u5907\u5FD8").setIcon("trash").onClick(() => {
+              void (async () => {
+                const currentSpace = this.spaceManager.getSpace(this.spaceId);
+                if (currentSpace && currentSpace.memos) {
+                  const targetMemo = currentSpace.memos.find((m) => m.id === memoId);
+                  if (targetMemo) {
+                    await this.deleteMemoAttachments(targetMemo.text);
+                  }
+                  currentSpace.memos = currentSpace.memos.filter((m) => m.id !== memoId);
+                  await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
                 }
-                currentSpace.memos = currentSpace.memos.filter((m) => m.id !== memoId);
-                await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
-              }
+              })();
             });
           });
         }
@@ -1789,16 +1809,18 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         });
         memoContent.addEventListener("dblclick", (e) => {
           e.stopPropagation();
-          new MemoModal(this.app, "\u4FEE\u6539\u5907\u5FD8\u5F55", "\u4FDD\u5B58", memo.text, async (newText) => {
-            const currentSpace = this.spaceManager.getSpace(this.spaceId);
-            if (currentSpace && currentSpace.memos) {
-              const targetMemo = currentSpace.memos.find((m) => m.id === memo.id);
-              if (targetMemo) {
-                targetMemo.text = newText;
-                targetMemo.updatedAt = this.getJSTTimestamp();
-                await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+          new MemoModal(this.app, "\u4FEE\u6539\u5907\u5FD8\u5F55", "\u4FDD\u5B58", memo.text, (newText) => {
+            void (async () => {
+              const currentSpace = this.spaceManager.getSpace(this.spaceId);
+              if (currentSpace && currentSpace.memos) {
+                const targetMemo = currentSpace.memos.find((m) => m.id === memo.id);
+                if (targetMemo) {
+                  targetMemo.text = newText;
+                  targetMemo.updatedAt = this.getJSTTimestamp();
+                  await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+                }
               }
-            }
+            })();
           }).open();
         });
         const memoFooter = memoItem.createDiv({
@@ -1827,16 +1849,18 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
         (0, import_obsidian4.setIcon)(editBtn, "pencil");
         editBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          new MemoModal(this.app, "\u4FEE\u6539\u5907\u5FD8\u5F55", "\u4FDD\u5B58", memo.text, async (newText) => {
-            const currentSpace = this.spaceManager.getSpace(this.spaceId);
-            if (currentSpace && currentSpace.memos) {
-              const targetMemo = currentSpace.memos.find((m) => m.id === memo.id);
-              if (targetMemo) {
-                targetMemo.text = newText;
-                targetMemo.updatedAt = this.getJSTTimestamp();
-                await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+          new MemoModal(this.app, "\u4FEE\u6539\u5907\u5FD8\u5F55", "\u4FDD\u5B58", memo.text, (newText) => {
+            void (async () => {
+              const currentSpace = this.spaceManager.getSpace(this.spaceId);
+              if (currentSpace && currentSpace.memos) {
+                const targetMemo = currentSpace.memos.find((m) => m.id === memo.id);
+                if (targetMemo) {
+                  targetMemo.text = newText;
+                  targetMemo.updatedAt = this.getJSTTimestamp();
+                  await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+                }
               }
-            }
+            })();
           }).open();
         });
         const deleteBtn = memoItemActions.createEl("span", {
@@ -1844,17 +1868,19 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
           title: "\u5220\u9664"
         });
         (0, import_obsidian4.setIcon)(deleteBtn, "trash");
-        deleteBtn.addEventListener("click", async (e) => {
+        deleteBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          const currentSpace = this.spaceManager.getSpace(this.spaceId);
-          if (currentSpace && currentSpace.memos) {
-            const targetMemo = currentSpace.memos.find((m) => m.id === memo.id);
-            if (targetMemo) {
-              await this.deleteMemoAttachments(targetMemo.text);
+          void (async () => {
+            const currentSpace = this.spaceManager.getSpace(this.spaceId);
+            if (currentSpace && currentSpace.memos) {
+              const targetMemo = currentSpace.memos.find((m) => m.id === memo.id);
+              if (targetMemo) {
+                await this.deleteMemoAttachments(targetMemo.text);
+              }
+              currentSpace.memos = currentSpace.memos.filter((m) => m.id !== memo.id);
+              await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
             }
-            currentSpace.memos = currentSpace.memos.filter((m) => m.id !== memo.id);
-            await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
-          }
+          })();
         });
       });
     }
@@ -2161,14 +2187,16 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
           subMenu.addSeparator();
           subMenu.addItem((subItem) => {
             subItem.setTitle("+ \u65B0\u5EFA\u7A7A\u95F4\u5E76\u6DFB\u52A0").onClick(() => {
-              new SpaceModal(this.app, async (name, icon, color) => {
-                const newSpace = await this.spaceManager.createSpace(name, icon, color);
-                if (file instanceof import_obsidian7.TFile) {
-                  await this.spaceManager.addFileToSpace(newSpace.id, file.path);
-                } else if (file instanceof import_obsidian7.TFolder) {
-                  await this.spaceManager.addFolderToSpace(newSpace.id, file.path);
-                }
-                void this.activateSpace(newSpace.id);
+              new SpaceModal(this.app, (name, icon, color) => {
+                void (async () => {
+                  const newSpace = await this.spaceManager.createSpace(name, icon, color);
+                  if (file instanceof import_obsidian7.TFile) {
+                    await this.spaceManager.addFileToSpace(newSpace.id, file.path);
+                  } else if (file instanceof import_obsidian7.TFolder) {
+                    await this.spaceManager.addFolderToSpace(newSpace.id, file.path);
+                  }
+                  void this.activateSpace(newSpace.id);
+                })();
               }).open();
             });
           });
@@ -2226,9 +2254,11 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       id: "create-space",
       name: "\u65B0\u5EFA\u9879\u76EE\u7A7A\u95F4 (Create Space)",
       callback: () => {
-        new SpaceModal(this.app, async (name, icon, color) => {
-          const space = await this.spaceManager.createSpace(name, icon, color);
-          void this.activateSpace(space.id);
+        new SpaceModal(this.app, (name, icon, color) => {
+          void (async () => {
+            const space = await this.spaceManager.createSpace(name, icon, color);
+            void this.activateSpace(space.id);
+          })();
         }).open();
       }
     });
@@ -2367,7 +2397,13 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       if (!await adapter.exists(SPACES_DIR)) {
         await adapter.mkdir(SPACES_DIR);
       }
-      const { spaces: _spaces, ...globalSettings } = this.settings;
+      const globalSettings = {
+        activeSpaceId: this.settings.activeSpaceId,
+        enableDashboard: this.settings.enableDashboard,
+        enableDynamicQuery: this.settings.enableDynamicQuery,
+        enableWorkspaceSync: this.settings.enableWorkspaceSync,
+        showSpaceBadge: this.settings.showSpaceBadge
+      };
       await adapter.write(SETTINGS_PATH, JSON.stringify(globalSettings, null, 2));
       const currentSpaceIds = /* @__PURE__ */ new Set();
       for (const space of this.settings.spaces) {
@@ -2400,7 +2436,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       if (oldSpace) {
         const openTabs = [];
         this.app.workspace.iterateRootLeaves((leaf) => {
-          if (leaf.view.getViewType() === "markdown") {
+          if (leaf.view instanceof import_obsidian7.MarkdownView) {
             const file = leaf.view.file;
             if (file instanceof import_obsidian7.TFile) {
               openTabs.push(file.path);
@@ -2436,7 +2472,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       const activeTab = workspace.activeTab;
       if (activeTab) {
         this.app.workspace.iterateRootLeaves((leaf) => {
-          if (leaf.view.getViewType() === "markdown") {
+          if (leaf.view instanceof import_obsidian7.MarkdownView) {
             const file = leaf.view.file;
             if (file instanceof import_obsidian7.TFile && file.path === activeTab) {
               this.app.workspace.setActiveLeaf(leaf, { focus: true });
@@ -2446,7 +2482,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       }
     }
     if (this.settings.enableDashboard) {
-      this.openDashboard(spaceId);
+      void this.openDashboard(spaceId);
     }
   }
   async activateExplorerView() {
@@ -2466,7 +2502,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
       }
     }
     if (leaf) {
-      workspace.revealLeaf(leaf);
+      void workspace.revealLeaf(leaf);
     }
   }
   async openDashboard(spaceId) {
@@ -2483,7 +2519,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
     }
     const view = leaf.view;
     view.setSpaceId(spaceId);
-    this.app.workspace.revealLeaf(leaf);
+    void this.app.workspace.revealLeaf(leaf);
   }
   updateViews() {
     this.app.workspace.getLeavesOfType(VIEW_TYPE_SPACE_EXPLORER).forEach((leaf) => {
@@ -2493,7 +2529,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
     });
     this.app.workspace.getLeavesOfType(VIEW_TYPE_SPACE_DASHBOARD).forEach((leaf) => {
       if (leaf.view instanceof SpaceDashboardView) {
-        leaf.view.render();
+        void leaf.view.render();
       }
     });
   }

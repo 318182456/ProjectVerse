@@ -62,7 +62,7 @@ export class SpaceExplorerView extends ItemView {
     const headerActions = header.createDiv({ cls: 'vps-explorer-header-actions' });
     headerActions.addEventListener('click', (e) => e.stopPropagation());
     
-    const activeSpaceId = (this.app as any).plugins?.plugins?.['project-verse']?.settings?.activeSpaceId;
+    const activeSpaceId = (this.app as unknown as { plugins: { plugins: Record<string, { settings: { activeSpaceId: string } }> } }).plugins?.plugins?.['project-verse']?.settings?.activeSpaceId;
     const activeSpace = activeSpaceId ? this.spaceManager.getSpace(activeSpaceId) : null;
 
     const addBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
@@ -458,7 +458,7 @@ export class SpaceExplorerView extends ItemView {
         const files = this.spaceManager.getSpaceFiles(activeSpaceId);
         const folders = this.spaceManager.getSpaceFolders(activeSpaceId);
         if (files.length === 0 && folders.length === 0) {
-          const d = treeContainer.createDiv({ 
+          treeContainer.createDiv({ 
             text: '该空间暂无关联文件。右键文件列表选择 "Add to Space" 加入。',
             cls: 'vps-space-meta vps-space-meta-padding'
           });

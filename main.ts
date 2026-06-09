@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, TFile, TFolder, Notice, normalizePath, Events, App, SuggestModal, Menu, MenuItem } from 'obsidian';
+import { Plugin, WorkspaceLeaf, TFile, TFolder, Notice, normalizePath, Events, App, SuggestModal, Menu, MenuItem, MarkdownView } from 'obsidian';
 import { SpaceManager } from './spaceManager';
 import { VIEW_TYPE_SPACE_EXPLORER, SpaceExplorerView } from './spaceExplorerView';
 import { VIEW_TYPE_SPACE_DASHBOARD, SpaceDashboardView } from './spaceDashboardView';
@@ -80,14 +80,16 @@ export default class VirtualProjectSpacePlugin extends Plugin {
           subMenu.addItem((subItem: MenuItem) => {
             subItem.setTitle('+ 新建空间并添加')
               .onClick(() => {
-                new SpaceModal(this.app, async (name, icon, color) => {
-                  const newSpace = await this.spaceManager.createSpace(name, icon, color);
-                  if (file instanceof TFile) {
-                    await this.spaceManager.addFileToSpace(newSpace.id, file.path);
-                  } else if (file instanceof TFolder) {
-                    await this.spaceManager.addFolderToSpace(newSpace.id, file.path);
-                  }
-                  void this.activateSpace(newSpace.id);
+                new SpaceModal(this.app, (name, icon, color) => {
+                  void (async () => {
+                    const newSpace = await this.spaceManager.createSpace(name, icon, color);
+                    if (file instanceof TFile) {
+                      await this.spaceManager.addFileToSpace(newSpace.id, file.path);
+                    } else if (file instanceof TFolder) {
+                      await this.spaceManager.addFolderToSpace(newSpace.id, file.path);
+                    }
+                    void this.activateSpace(newSpace.id);
+                  })();
                 }).open();
               });
           });
@@ -157,9 +159,11 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       id: 'create-space',
       name: '新建项目空间 (Create Space)',
       callback: () => {
-        new SpaceModal(this.app, async (name, icon, color) => {
-          const space = await this.spaceManager.createSpace(name, icon, color);
-          void this.activateSpace(space.id);
+        new SpaceModal(this.app, (name, icon, color) => {
+          void (async () => {
+            const space = await this.spaceManager.createSpace(name, icon, color);
+            void this.activateSpace(space.id);
+          })();
         }).open();
       }
     });
@@ -317,7 +321,13 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         await adapter.mkdir(SPACES_DIR);
       }
 
-      const { spaces: _spaces, ...globalSettings } = this.settings;
+      const globalSettings: Omit<PluginSettings, 'spaces'> = {
+        activeSpaceId: this.settings.activeSpaceId,
+        enableDashboard: this.settings.enableDashboard,
+        enableDynamicQuery: this.settings.enableDynamicQuery,
+        enableWorkspaceSync: this.settings.enableWorkspaceSync,
+        showSpaceBadge: this.settings.showSpaceBadge
+      };
       await adapter.write(SETTINGS_PATH, JSON.stringify(globalSettings, null, 2));
 
       const currentSpaceIds = new Set<string>();
@@ -355,8 +365,8 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       if (oldSpace) {
         const openTabs: string[] = [];
         this.app.workspace.iterateRootLeaves((leaf) => {
-          if (leaf.view.getViewType() === 'markdown') {
-            const file = (leaf.view as any).file;
+          if (leaf.view instanceof MarkdownView) {
+            const file = leaf.view.file;
             if (file instanceof TFile) {
               openTabs.push(file.path);
             }
@@ -400,8 +410,8 @@ export default class VirtualProjectSpacePlugin extends Plugin {
       const activeTab = workspace.activeTab;
       if (activeTab) {
         this.app.workspace.iterateRootLeaves((leaf) => {
-          if (leaf.view.getViewType() === 'markdown') {
-            const file = (leaf.view as any).file;
+          if (leaf.view instanceof MarkdownView) {
+            const file = leaf.view.file;
             if (file instanceof TFile && file.path === activeTab) {
               this.app.workspace.setActiveLeaf(leaf, { focus: true });
             }
@@ -412,7 +422,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
     // Open Dashboard automatically on activation
     if (this.settings.enableDashboard) {
-      this.openDashboard(spaceId);
+      void this.openDashboard(spaceId);
     }
   }
 
@@ -435,7 +445,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
     }
 
     if (leaf) {
-      workspace.revealLeaf(leaf);
+      void workspace.revealLeaf(leaf);
     }
   }
 
@@ -455,7 +465,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
     const view = leaf.view as SpaceDashboardView;
     view.setSpaceId(spaceId);
-    this.app.workspace.revealLeaf(leaf);
+    void this.app.workspace.revealLeaf(leaf);
   }
 
   updateViews() {
@@ -467,7 +477,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
     this.app.workspace.getLeavesOfType(VIEW_TYPE_SPACE_DASHBOARD).forEach((leaf) => {
       if (leaf.view instanceof SpaceDashboardView) {
-        leaf.view.render();
+        void leaf.view.render();
       }
     });
   }
