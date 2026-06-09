@@ -114,7 +114,7 @@ export class SpaceDashboardView extends ItemView {
   async render() {
     const activeSpaceId = (this.app as any).plugins?.plugins?.["projectVerse"]
       ?.settings?.activeSpaceId;
-    const targetId = activeSpaceId || this.spaceId;
+    const targetId = this.spaceId || activeSpaceId;
     this.spaceId = targetId;
 
     (this.leaf as any).updateHeader();
