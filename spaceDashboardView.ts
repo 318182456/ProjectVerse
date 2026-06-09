@@ -332,15 +332,7 @@ export class SpaceDashboardView extends ItemView {
     filesStat.createDiv({ cls: "vps-stat-value", text: String(filesCount) });
     filesStat.createDiv({ cls: "vps-stat-label", text: "总关联文件数" });
 
-    // Stat: Pending Tasks
-    const pendingTasksCount = this.tasks.filter((t) => !t.completed).length;
-    const tasksStat = statsRow.createDiv({ cls: "vps-stat-item" });
-    tasksStat.style.setProperty("--space-color", space.color);
-    tasksStat.createDiv({
-      cls: "vps-stat-value",
-      text: String(pendingTasksCount),
-    });
-    tasksStat.createDiv({ cls: "vps-stat-label", text: "待办任务数" });
+
 
     // Stat: Rules Count
     const rulesStat = statsRow.createDiv({ cls: "vps-stat-item" });
@@ -356,7 +348,14 @@ export class SpaceDashboardView extends ItemView {
     const tasksCard = grid.createDiv({ cls: "vps-dashboard-card" });
     const tasksTitle = tasksCard.createDiv({
       cls: "vps-dashboard-card-title",
-      text: "☑️ 待办事项",
+    });
+    
+    const tasksTitleLeft = tasksTitle.createDiv({ cls: "vps-title-left-group" });
+    tasksTitleLeft.createSpan({ text: "☑️ 待办事项" });
+    const pendingTasksCount = this.tasks.filter((t) => !t.completed).length;
+    tasksTitleLeft.createSpan({
+      cls: "vps-title-count",
+      text: String(pendingTasksCount),
     });
 
     const tasksActions = tasksTitle.createDiv({ cls: "vps-quick-actions" });
@@ -480,7 +479,14 @@ export class SpaceDashboardView extends ItemView {
     const memoCard = grid.createDiv({ cls: "vps-dashboard-card" });
     const memoHeader = memoCard.createDiv({
       cls: "vps-dashboard-card-title",
-      text: "📝 备忘录",
+    });
+
+    const memoHeaderLeft = memoHeader.createDiv({ cls: "vps-title-left-group" });
+    memoHeaderLeft.createSpan({ text: "📝 备忘录" });
+    const memosCount = (space.memos || []).length;
+    memoHeaderLeft.createSpan({
+      cls: "vps-title-count",
+      text: String(memosCount),
     });
 
     const memoActions = memoHeader.createDiv({ cls: "vps-quick-actions" });

@@ -1583,14 +1583,6 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const filesCount = this.spaceManager.getSpaceFiles(space.id).length;
     filesStat.createDiv({ cls: "vps-stat-value", text: String(filesCount) });
     filesStat.createDiv({ cls: "vps-stat-label", text: "\u603B\u5173\u8054\u6587\u4EF6\u6570" });
-    const pendingTasksCount = this.tasks.filter((t) => !t.completed).length;
-    const tasksStat = statsRow.createDiv({ cls: "vps-stat-item" });
-    tasksStat.style.setProperty("--space-color", space.color);
-    tasksStat.createDiv({
-      cls: "vps-stat-value",
-      text: String(pendingTasksCount)
-    });
-    tasksStat.createDiv({ cls: "vps-stat-label", text: "\u5F85\u529E\u4EFB\u52A1\u6570" });
     const rulesStat = statsRow.createDiv({ cls: "vps-stat-item" });
     rulesStat.style.setProperty("--space-color", space.color);
     const rulesCount = space.tags.length + space.queries.length;
@@ -1599,8 +1591,14 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     const grid = dashboardEl.createDiv({ cls: "vps-dashboard-grid" });
     const tasksCard = grid.createDiv({ cls: "vps-dashboard-card" });
     const tasksTitle = tasksCard.createDiv({
-      cls: "vps-dashboard-card-title",
-      text: "\u2611\uFE0F \u5F85\u529E\u4E8B\u9879"
+      cls: "vps-dashboard-card-title"
+    });
+    const tasksTitleLeft = tasksTitle.createDiv({ cls: "vps-title-left-group" });
+    tasksTitleLeft.createSpan({ text: "\u2611\uFE0F \u5F85\u529E\u4E8B\u9879" });
+    const pendingTasksCount = this.tasks.filter((t) => !t.completed).length;
+    tasksTitleLeft.createSpan({
+      cls: "vps-title-count",
+      text: String(pendingTasksCount)
     });
     const tasksActions = tasksTitle.createDiv({ cls: "vps-quick-actions" });
     const hideCompletedLabel = tasksActions.createEl("label", {
@@ -1698,8 +1696,14 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
     }
     const memoCard = grid.createDiv({ cls: "vps-dashboard-card" });
     const memoHeader = memoCard.createDiv({
-      cls: "vps-dashboard-card-title",
-      text: "\u{1F4DD} \u5907\u5FD8\u5F55"
+      cls: "vps-dashboard-card-title"
+    });
+    const memoHeaderLeft = memoHeader.createDiv({ cls: "vps-title-left-group" });
+    memoHeaderLeft.createSpan({ text: "\u{1F4DD} \u5907\u5FD8\u5F55" });
+    const memosCount = (space.memos || []).length;
+    memoHeaderLeft.createSpan({
+      cls: "vps-title-count",
+      text: String(memosCount)
     });
     const memoActions = memoHeader.createDiv({ cls: "vps-quick-actions" });
     const addMemoBtn = memoActions.createEl("button", {

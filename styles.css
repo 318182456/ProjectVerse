@@ -371,7 +371,7 @@
 /* Stats Area */
 .vps-stats-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
@@ -683,4 +683,21 @@
 .vps-memo-preview-container img:hover {
   transform: scale(1.01);
 }
+
+.vps-title-left-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vps-title-count {
+  font-size: 0.75em;
+  background-color: var(--background-secondary-alt);
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+  border: 1px solid var(--vps-card-border);
+}
+
 
