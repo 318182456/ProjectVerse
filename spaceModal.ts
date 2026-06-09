@@ -52,7 +52,9 @@ export class SpaceModal extends Modal {
       .setName('空间图标')
       .setDesc('在侧边栏显示的图标')
       .addDropdown(dropdown => {
-        icons.forEach(i => dropdown.addOption(i.value, i.name));
+        for (const i of icons) {
+          dropdown.addOption(i.value, i.name);
+        }
         dropdown.setValue(this.icon);
         dropdown.onChange(value => {
           this.icon = value;

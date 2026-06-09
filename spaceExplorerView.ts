@@ -44,6 +44,33 @@ export class SpaceExplorerView extends ItemView {
     // Nothing to clean up
   }
 
+  private async copyFolderRecursive(sourceFolderPath: string, targetFolderPath: string, copiedFiles: string[]) {
+    const folder = this.app.vault.getAbstractFileByPath(sourceFolderPath);
+    if (folder instanceof TFolder) {
+      for (const child of folder.children) {
+        const relativePath = child.path.substring(sourceFolderPath.length + 1);
+        const destPath = normalizePath(`${targetFolderPath}/${relativePath}`);
+        if (child instanceof TFolder) {
+          if (!(await this.app.vault.adapter.exists(destPath))) {
+            await this.app.vault.createFolder(destPath);
+          }
+          await this.copyFolderRecursive(child.path, destPath, copiedFiles);
+        } else if (child instanceof TFile) {
+          const destLastSlash = destPath.lastIndexOf('/');
+          if (destLastSlash !== -1) {
+            const destParent = destPath.substring(0, destLastSlash);
+            if (!(await this.app.vault.adapter.exists(destParent))) {
+              await this.app.vault.createFolder(destParent);
+            }
+          }
+          const data = await this.app.vault.readBinary(child);
+          await this.app.vault.createBinary(destPath, data);
+          copiedFiles.push(destPath);
+        }
+      }
+    }
+  }
+
   setKeyword(kw: string) {
     this.searchKeyword = kw;
     this.render();
@@ -198,27 +225,15 @@ export class SpaceExplorerView extends ItemView {
                   }
                   await this.app.vault.createFolder(newFolderPath);
                   
-                  const files = this.app.vault.getFiles();
-                  const sourcePrefix = path + '/';
-                  for (const file of files) {
-                    if (file.path.startsWith(sourcePrefix)) {
-                      const relativePath = file.path.substring(sourcePrefix.length);
-                      const destPath = normalizePath(`${newFolderPath}/${relativePath}`);
-                      const destLastSlash = destPath.lastIndexOf('/');
-                      if (destLastSlash !== -1) {
-                        const destParent = destPath.substring(0, destLastSlash);
-                        if (!(await this.app.vault.adapter.exists(destParent))) {
-                          await this.app.vault.createFolder(destParent);
-                        }
-                      }
-                      await this.app.vault.copy(file, destPath);
-                      
-                      const space = this.spaceManager.getSpace(activeSpace.id);
-                      if (space) {
-                        const isSubfolder = space.folders.some(f => destPath.startsWith(f === '/' ? '' : f + '/'));
-                        if (!isSubfolder) {
-                          await this.spaceManager.addFileToSpace(activeSpace.id, destPath);
-                        }
+                  const copiedFiles: string[] = [];
+                  await this.copyFolderRecursive(path, newFolderPath, copiedFiles);
+
+                  const space = this.spaceManager.getSpace(activeSpace.id);
+                  if (space) {
+                    for (const destPath of copiedFiles) {
+                      const isSubfolder = space.folders.some(f => destPath.startsWith(f === '/' ? '' : f + '/'));
+                      if (!isSubfolder) {
+                        await this.spaceManager.addFileToSpace(activeSpace.id, destPath);
                       }
                     }
                   }
@@ -240,7 +255,8 @@ export class SpaceExplorerView extends ItemView {
                   const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
                   const file = this.app.vault.getAbstractFileByPath(path);
                   if (file instanceof TFile) {
-                    await this.app.vault.copy(file, newPath);
+                    const data = await this.app.vault.readBinary(file);
+                    await this.app.vault.createBinary(newPath, data);
                     const space = this.spaceManager.getSpace(activeSpace.id);
                     if (space) {
                       const isSubfolder = space.folders.some(f => newPath.startsWith(f === '/' ? '' : f + '/'));
@@ -667,27 +683,15 @@ export class SpaceExplorerView extends ItemView {
                       }
                       await this.app.vault.createFolder(newFolderPath);
                       
-                      const files = this.app.vault.getFiles();
-                      const sourcePrefix = path + '/';
-                      for (const file of files) {
-                        if (file.path.startsWith(sourcePrefix)) {
-                          const relativePath = file.path.substring(sourcePrefix.length);
-                          const destPath = normalizePath(`${newFolderPath}/${relativePath}`);
-                          const destLastSlash = destPath.lastIndexOf('/');
-                          if (destLastSlash !== -1) {
-                            const destParent = destPath.substring(0, destLastSlash);
-                            if (!(await this.app.vault.adapter.exists(destParent))) {
-                              await this.app.vault.createFolder(destParent);
-                            }
-                          }
-                          await this.app.vault.copy(file, destPath);
-                          
-                          const space = this.spaceManager.getSpace(spaceId);
-                          if (space) {
-                            const isSubfolder = space.folders.some(f => destPath.startsWith(f === '/' ? '' : f + '/'));
-                            if (!isSubfolder) {
-                              await this.spaceManager.addFileToSpace(spaceId, destPath);
-                            }
+                      const copiedFiles: string[] = [];
+                      await this.copyFolderRecursive(path, newFolderPath, copiedFiles);
+
+                      const space = this.spaceManager.getSpace(spaceId);
+                      if (space) {
+                        for (const destPath of copiedFiles) {
+                          const isSubfolder = space.folders.some(f => destPath.startsWith(f === '/' ? '' : f + '/'));
+                          if (!isSubfolder) {
+                            await this.spaceManager.addFileToSpace(spaceId, destPath);
                           }
                         }
                       }
@@ -798,7 +802,8 @@ export class SpaceExplorerView extends ItemView {
                       const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
                       const file = this.app.vault.getAbstractFileByPath(path);
                       if (file instanceof TFile) {
-                        await this.app.vault.copy(file, newPath);
+                        const data = await this.app.vault.readBinary(file);
+                        await this.app.vault.createBinary(newPath, data);
                         const space = this.spaceManager.getSpace(spaceId);
                         if (space) {
                           const isSubfolder = space.folders.some(f => newPath.startsWith(f === '/' ? '' : f + '/'));

@@ -387,7 +387,9 @@ var SpaceModal = class extends import_obsidian2.Modal {
       { name: "\u8BBE\u7F6E/\u9F7F\u8F6E", value: "lucide-settings" }
     ];
     new import_obsidian2.Setting(contentEl).setName("\u7A7A\u95F4\u56FE\u6807").setDesc("\u5728\u4FA7\u8FB9\u680F\u663E\u793A\u7684\u56FE\u6807").addDropdown((dropdown) => {
-      icons.forEach((i) => dropdown.addOption(i.value, i.name));
+      for (const i of icons) {
+        dropdown.addOption(i.value, i.name);
+      }
       dropdown.setValue(this.icon);
       dropdown.onChange((value) => {
         this.icon = value;
@@ -439,6 +441,32 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     this.render();
   }
   async onClose() {
+  }
+  async copyFolderRecursive(sourceFolderPath, targetFolderPath, copiedFiles) {
+    const folder = this.app.vault.getAbstractFileByPath(sourceFolderPath);
+    if (folder instanceof import_obsidian3.TFolder) {
+      for (const child of folder.children) {
+        const relativePath = child.path.substring(sourceFolderPath.length + 1);
+        const destPath = (0, import_obsidian3.normalizePath)(`${targetFolderPath}/${relativePath}`);
+        if (child instanceof import_obsidian3.TFolder) {
+          if (!await this.app.vault.adapter.exists(destPath)) {
+            await this.app.vault.createFolder(destPath);
+          }
+          await this.copyFolderRecursive(child.path, destPath, copiedFiles);
+        } else if (child instanceof import_obsidian3.TFile) {
+          const destLastSlash = destPath.lastIndexOf("/");
+          if (destLastSlash !== -1) {
+            const destParent = destPath.substring(0, destLastSlash);
+            if (!await this.app.vault.adapter.exists(destParent)) {
+              await this.app.vault.createFolder(destParent);
+            }
+          }
+          const data = await this.app.vault.readBinary(child);
+          await this.app.vault.createBinary(destPath, data);
+          copiedFiles.push(destPath);
+        }
+      }
+    }
   }
   setKeyword(kw) {
     this.searchKeyword = kw;
@@ -569,26 +597,14 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
                     return;
                   }
                   await this.app.vault.createFolder(newFolderPath);
-                  const files = this.app.vault.getFiles();
-                  const sourcePrefix = path + "/";
-                  for (const file of files) {
-                    if (file.path.startsWith(sourcePrefix)) {
-                      const relativePath = file.path.substring(sourcePrefix.length);
-                      const destPath = (0, import_obsidian3.normalizePath)(`${newFolderPath}/${relativePath}`);
-                      const destLastSlash = destPath.lastIndexOf("/");
-                      if (destLastSlash !== -1) {
-                        const destParent = destPath.substring(0, destLastSlash);
-                        if (!await this.app.vault.adapter.exists(destParent)) {
-                          await this.app.vault.createFolder(destParent);
-                        }
-                      }
-                      await this.app.vault.copy(file, destPath);
-                      const space = this.spaceManager.getSpace(activeSpace.id);
-                      if (space) {
-                        const isSubfolder = space.folders.some((f) => destPath.startsWith(f === "/" ? "" : f + "/"));
-                        if (!isSubfolder) {
-                          await this.spaceManager.addFileToSpace(activeSpace.id, destPath);
-                        }
+                  const copiedFiles = [];
+                  await this.copyFolderRecursive(path, newFolderPath, copiedFiles);
+                  const space = this.spaceManager.getSpace(activeSpace.id);
+                  if (space) {
+                    for (const destPath of copiedFiles) {
+                      const isSubfolder = space.folders.some((f) => destPath.startsWith(f === "/" ? "" : f + "/"));
+                      if (!isSubfolder) {
+                        await this.spaceManager.addFileToSpace(activeSpace.id, destPath);
                       }
                     }
                   }
@@ -609,7 +625,8 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
                   const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${newName}${ext}`);
                   const file = this.app.vault.getAbstractFileByPath(path);
                   if (file instanceof import_obsidian3.TFile) {
-                    await this.app.vault.copy(file, newPath);
+                    const data = await this.app.vault.readBinary(file);
+                    await this.app.vault.createBinary(newPath, data);
                     const space = this.spaceManager.getSpace(activeSpace.id);
                     if (space) {
                       const isSubfolder = space.folders.some((f) => newPath.startsWith(f === "/" ? "" : f + "/"));
@@ -981,26 +998,14 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
                       return;
                     }
                     await this.app.vault.createFolder(newFolderPath);
-                    const files = this.app.vault.getFiles();
-                    const sourcePrefix = path + "/";
-                    for (const file of files) {
-                      if (file.path.startsWith(sourcePrefix)) {
-                        const relativePath = file.path.substring(sourcePrefix.length);
-                        const destPath = (0, import_obsidian3.normalizePath)(`${newFolderPath}/${relativePath}`);
-                        const destLastSlash = destPath.lastIndexOf("/");
-                        if (destLastSlash !== -1) {
-                          const destParent = destPath.substring(0, destLastSlash);
-                          if (!await this.app.vault.adapter.exists(destParent)) {
-                            await this.app.vault.createFolder(destParent);
-                          }
-                        }
-                        await this.app.vault.copy(file, destPath);
-                        const space = this.spaceManager.getSpace(spaceId);
-                        if (space) {
-                          const isSubfolder = space.folders.some((f) => destPath.startsWith(f === "/" ? "" : f + "/"));
-                          if (!isSubfolder) {
-                            await this.spaceManager.addFileToSpace(spaceId, destPath);
-                          }
+                    const copiedFiles = [];
+                    await this.copyFolderRecursive(path, newFolderPath, copiedFiles);
+                    const space = this.spaceManager.getSpace(spaceId);
+                    if (space) {
+                      for (const destPath of copiedFiles) {
+                        const isSubfolder = space.folders.some((f) => destPath.startsWith(f === "/" ? "" : f + "/"));
+                        if (!isSubfolder) {
+                          await this.spaceManager.addFileToSpace(spaceId, destPath);
                         }
                       }
                     }
@@ -1097,7 +1102,8 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
                     const newPath = (0, import_obsidian3.normalizePath)(`${parentPath}/${newName}${ext}`);
                     const file = this.app.vault.getAbstractFileByPath(path);
                     if (file instanceof import_obsidian3.TFile) {
-                      await this.app.vault.copy(file, newPath);
+                      const data = await this.app.vault.readBinary(file);
+                      await this.app.vault.createBinary(newPath, data);
                       const space = this.spaceManager.getSpace(spaceId);
                       if (space) {
                         const isSubfolder = space.folders.some((f) => newPath.startsWith(f === "/" ? "" : f + "/"));
