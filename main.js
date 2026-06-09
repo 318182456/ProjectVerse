@@ -1719,15 +1719,16 @@ var SpaceDashboardView = class extends import_obsidian4.ItemView {
       menu.showAtPosition({ x: event.clientX, y: event.clientY });
     });
     const displayedMemos = (space.memos || []).slice().reverse();
+    memoList.addEventListener("dblclick", (e) => {
+      const target = e.target;
+      if (!target.closest(".vps-memo-item")) {
+        openAddMemoModal();
+      }
+    });
     if (displayedMemos.length === 0) {
       memoList.createDiv({
         text: "\u6682\u65E0\u5907\u5FD8\u4FE1\u606F\uFF0C\u53CC\u51FB\u6216\u70B9\u51FB\u53F3\u4E0A\u89D2\u6309\u94AE\u6DFB\u52A0",
         cls: "vps-space-meta"
-      });
-      memoList.addEventListener("dblclick", (e) => {
-        if (e.target === memoList) {
-          openAddMemoModal();
-        }
       });
     } else {
       displayedMemos.forEach((memo) => {

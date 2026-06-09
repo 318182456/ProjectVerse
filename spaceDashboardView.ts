@@ -491,16 +491,18 @@ export class SpaceDashboardView extends ItemView {
 
     const displayedMemos = (space.memos || []).slice().reverse(); // Show newest first
 
+    // Double click to add memo on empty area or anywhere inside memoList that is not a memo item
+    memoList.addEventListener("dblclick", (e) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".vps-memo-item")) {
+        openAddMemoModal();
+      }
+    });
+
     if (displayedMemos.length === 0) {
       memoList.createDiv({
         text: "暂无备忘信息，双击或点击右上角按钮添加",
         cls: "vps-space-meta",
-      });
-      // Double click to add memo on empty area
-      memoList.addEventListener("dblclick", (e) => {
-        if (e.target === memoList) {
-          openAddMemoModal();
-        }
       });
     } else {
       displayedMemos.forEach((memo) => {
