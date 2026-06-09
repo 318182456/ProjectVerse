@@ -67,7 +67,7 @@ export class SpaceExplorerView extends ItemView {
     const addBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
     setIcon(addBtn, 'plus');
     addBtn.setAttribute('title', '新建空间/笔记/文件夹');
-    addBtn.addEventListener('click', async (e) => {
+    addBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (activeSpace) {
         const menu = new Menu();
@@ -76,7 +76,7 @@ export class SpaceExplorerView extends ItemView {
         menu.addItem(item => {
           item.setTitle("新建笔记")
             .setIcon("file-plus")
-            .onClick(async () => {
+            .onClick(() => {
               const path = this.selectedPath;
               const isFolder = this.selectedIsFolder;
               let parentPath = '';
@@ -87,24 +87,26 @@ export class SpaceExplorerView extends ItemView {
                   parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : '';
                 }
               }
-              new InputModal(this.app, "新建笔记", "笔记名称", "请输入笔记名称...", "", async (noteName) => {
-                if (noteName) {
-                  const newPath = normalizePath(`${parentPath}/${noteName}.md`);
-                  if (await this.app.vault.adapter.exists(newPath)) {
-                    new Notice("该笔记已存在！");
-                    return;
-                  }
-                  await this.app.vault.create(newPath, "");
-                  const space = this.spaceManager.getSpace(activeSpace.id);
-                  if (space) {
-                    const isSubfolder = space.folders.some(f => newPath.startsWith(f === '/' ? '' : f + '/'));
-                    if (!isSubfolder) {
-                      await this.spaceManager.addFileToSpace(activeSpace.id, newPath);
+              new InputModal(this.app, "新建笔记", "笔记名称", "请输入笔记名称...", "", (noteName) => {
+                void (async () => {
+                  if (noteName) {
+                    const newPath = normalizePath(`${parentPath}/${noteName}.md`);
+                    if (await this.app.vault.adapter.exists(newPath)) {
+                      new Notice("该笔记已存在！");
+                      return;
                     }
+                    await this.app.vault.create(newPath, "");
+                    const space = this.spaceManager.getSpace(activeSpace.id);
+                    if (space) {
+                      const isSubfolder = space.folders.some(f => newPath.startsWith(f === '/' ? '' : f + '/'));
+                      if (!isSubfolder) {
+                        await this.spaceManager.addFileToSpace(activeSpace.id, newPath);
+                      }
+                    }
+                    new Notice(`笔记创建成功: ${newPath}`);
+                    this.render();
                   }
-                  new Notice(`笔记创建成功: ${newPath}`);
-                  this.render();
-                }
+                })();
               }).open();
             });
         });
@@ -113,7 +115,7 @@ export class SpaceExplorerView extends ItemView {
         menu.addItem(item => {
           item.setTitle("新建文件夹")
             .setIcon("folder-plus")
-            .onClick(async () => {
+            .onClick(() => {
               const path = this.selectedPath;
               const isFolder = this.selectedIsFolder;
               let parentPath = '';
@@ -124,18 +126,20 @@ export class SpaceExplorerView extends ItemView {
                   parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : '';
                 }
               }
-              new InputModal(this.app, "新建文件夹", "文件夹名称", "请输入文件夹名称...", "", async (folderName) => {
-                if (folderName) {
-                  const newPath = normalizePath(`${parentPath}/${folderName}`);
-                  if (await this.app.vault.adapter.exists(newPath)) {
-                    new Notice("该文件夹已存在！");
-                    return;
+              new InputModal(this.app, "新建文件夹", "文件夹名称", "请输入文件夹名称...", "", (folderName) => {
+                void (async () => {
+                  if (folderName) {
+                    const newPath = normalizePath(`${parentPath}/${folderName}`);
+                    if (await this.app.vault.adapter.exists(newPath)) {
+                      new Notice("该文件夹已存在！");
+                      return;
+                    }
+                    await this.app.vault.createFolder(newPath);
+                    await this.spaceManager.addFolderToSpace(activeSpace.id, newPath);
+                    new Notice(`文件夹创建成功: ${newPath}`);
+                    this.render();
                   }
-                  await this.app.vault.createFolder(newPath);
-                  await this.spaceManager.addFolderToSpace(activeSpace.id, newPath);
-                  new Notice(`文件夹创建成功: ${newPath}`);
-                  this.render();
-                }
+                })();
               }).open();
             });
         });
@@ -147,10 +151,12 @@ export class SpaceExplorerView extends ItemView {
           item.setTitle("新建项目空间")
             .setIcon("folder-git")
             .onClick(() => {
-              new SpaceModal(this.app, async (name, icon, color) => {
-                const space = await this.spaceManager.createSpace(name, icon, color);
-                this.app.workspace.trigger('vps-space-activated', space.id);
-                this.render();
+              new SpaceModal(this.app, (name, icon, color) => {
+                void (async () => {
+                  const space = await this.spaceManager.createSpace(name, icon, color);
+                  this.app.workspace.trigger('vps-space-activated', space.id);
+                  this.render();
+                })();
               }).open();
             });
         });
@@ -158,10 +164,12 @@ export class SpaceExplorerView extends ItemView {
         menu.showAtMouseEvent(e);
       } else {
         // No active space -> directly create space
-        new SpaceModal(this.app, async (name, icon, color) => {
-          const space = await this.spaceManager.createSpace(name, icon, color);
-          this.app.workspace.trigger('vps-space-activated', space.id);
-          this.render();
+        new SpaceModal(this.app, (name, icon, color) => {
+          void (async () => {
+            const space = await this.spaceManager.createSpace(name, icon, color);
+            this.app.workspace.trigger('vps-space-activated', space.id);
+            this.render();
+          })();
         }).open();
       }
     });
@@ -171,51 +179,53 @@ export class SpaceExplorerView extends ItemView {
       const copyBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
       setIcon(copyBtn, 'copy');
       copyBtn.setAttribute('title', '复制空间/文件夹/笔记');
-      copyBtn.addEventListener('click', async (e) => {
+      copyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const path = this.selectedPath;
         const isFolder = this.selectedIsFolder;
         if (path) {
           if (isFolder) {
             // Copy Folder
-            new InputModal(this.app, "复制文件夹", "新文件夹名称", "请输入新文件夹名称...", "", async (folderName) => {
-              if (folderName) {
-                const lastSlash = path.lastIndexOf('/');
-                const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : '';
-                const newFolderPath = normalizePath(`${parentPath}/${folderName}`);
-                if (await this.app.vault.adapter.exists(newFolderPath)) {
-                  new Notice("目标文件夹已存在！");
-                  return;
-                }
-                await this.app.vault.createFolder(newFolderPath);
-                
-                const files = this.app.vault.getFiles();
-                const sourcePrefix = path + '/';
-                for (const file of files) {
-                  if (file.path.startsWith(sourcePrefix)) {
-                    const relativePath = file.path.substring(sourcePrefix.length);
-                    const destPath = normalizePath(`${newFolderPath}/${relativePath}`);
-                    const destLastSlash = destPath.lastIndexOf('/');
-                    if (destLastSlash !== -1) {
-                      const destParent = destPath.substring(0, destLastSlash);
-                      if (!(await this.app.vault.adapter.exists(destParent))) {
-                        await this.app.vault.createFolder(destParent);
+            new InputModal(this.app, "复制文件夹", "新文件夹名称", "请输入新文件夹名称...", "", (folderName) => {
+              void (async () => {
+                if (folderName) {
+                  const lastSlash = path.lastIndexOf('/');
+                  const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : '';
+                  const newFolderPath = normalizePath(`${parentPath}/${folderName}`);
+                  if (await this.app.vault.adapter.exists(newFolderPath)) {
+                    new Notice("目标文件夹已存在！");
+                    return;
+                  }
+                  await this.app.vault.createFolder(newFolderPath);
+                  
+                  const files = this.app.vault.getFiles();
+                  const sourcePrefix = path + '/';
+                  for (const file of files) {
+                    if (file.path.startsWith(sourcePrefix)) {
+                      const relativePath = file.path.substring(sourcePrefix.length);
+                      const destPath = normalizePath(`${newFolderPath}/${relativePath}`);
+                      const destLastSlash = destPath.lastIndexOf('/');
+                      if (destLastSlash !== -1) {
+                        const destParent = destPath.substring(0, destLastSlash);
+                        if (!(await this.app.vault.adapter.exists(destParent))) {
+                          await this.app.vault.createFolder(destParent);
+                        }
                       }
-                    }
-                    await this.app.vault.copy(file, destPath);
-                    
-                    const space = this.spaceManager.getSpace(activeSpace.id);
-                    if (space) {
-                      const isSubfolder = space.folders.some(f => destPath.startsWith(f === '/' ? '' : f + '/'));
-                      if (!isSubfolder) {
-                        await this.spaceManager.addFileToSpace(activeSpace.id, destPath);
+                      await this.app.vault.copy(file, destPath);
+                      
+                      const space = this.spaceManager.getSpace(activeSpace.id);
+                      if (space) {
+                        const isSubfolder = space.folders.some(f => destPath.startsWith(f === '/' ? '' : f + '/'));
+                        if (!isSubfolder) {
+                          await this.spaceManager.addFileToSpace(activeSpace.id, destPath);
+                        }
                       }
                     }
                   }
+                  new Notice("文件夹复制成功！");
+                  this.render();
                 }
-                new Notice("文件夹复制成功！");
-                this.render();
-              }
+              })();
             }).open();
           } else {
             // Copy File
@@ -224,31 +234,35 @@ export class SpaceExplorerView extends ItemView {
             const extMatch = path.match(/\.[^/.]+$/);
             const ext = extMatch ? extMatch[0] : '';
             const baseName = extMatch ? path.substring(lastSlash + 1, path.length - ext.length) : path.substring(lastSlash + 1);
-            new InputModal(this.app, "复制笔记", "新笔记名称", "请输入新笔记名称...", `${baseName}_copy`, async (newName) => {
-              if (newName) {
-                const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
-                const file = this.app.vault.getAbstractFileByPath(path);
-                if (file instanceof TFile) {
-                  await this.app.vault.copy(file, newPath);
-                  const space = this.spaceManager.getSpace(activeSpace.id);
-                  if (space) {
-                    const isSubfolder = space.folders.some(f => newPath.startsWith(f === '/' ? '' : f + '/'));
-                    if (!isSubfolder) {
-                      await this.spaceManager.addFileToSpace(activeSpace.id, newPath);
+            new InputModal(this.app, "复制笔记", "新笔记名称", "请输入新笔记名称...", `${baseName}_copy`, (newName) => {
+              void (async () => {
+                if (newName) {
+                  const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
+                  const file = this.app.vault.getAbstractFileByPath(path);
+                  if (file instanceof TFile) {
+                    await this.app.vault.copy(file, newPath);
+                    const space = this.spaceManager.getSpace(activeSpace.id);
+                    if (space) {
+                      const isSubfolder = space.folders.some(f => newPath.startsWith(f === '/' ? '' : f + '/'));
+                      if (!isSubfolder) {
+                        await this.spaceManager.addFileToSpace(activeSpace.id, newPath);
+                      }
                     }
+                    new Notice("文件复制成功！");
+                    this.render();
                   }
-                  new Notice("文件复制成功！");
-                  this.render();
                 }
-              }
+              })();
             }).open();
           }
         } else {
-          const newSpace = await this.spaceManager.duplicateSpace(activeSpace.id);
-          if (newSpace) {
-            this.app.workspace.trigger('vps-space-activated', newSpace.id);
-          }
-          this.render();
+          void (async () => {
+            const newSpace = await this.spaceManager.duplicateSpace(activeSpace.id);
+            if (newSpace) {
+              this.app.workspace.trigger('vps-space-activated', newSpace.id);
+            }
+            this.render();
+          })();
         }
       });
 
@@ -256,7 +270,7 @@ export class SpaceExplorerView extends ItemView {
       const editBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
       setIcon(editBtn, 'pencil');
       editBtn.setAttribute('title', '编辑空间/重命名');
-      editBtn.addEventListener('click', async (e) => {
+      editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const path = this.selectedPath;
         const isFolder = this.selectedIsFolder;
@@ -266,17 +280,19 @@ export class SpaceExplorerView extends ItemView {
             const lastSlash = path.lastIndexOf('/');
             const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : '';
             const currentName = lastSlash !== -1 ? path.substring(lastSlash + 1) : path;
-            new InputModal(this.app, "重命名文件夹", "新文件夹名称", "请输入新文件夹名称...", currentName, async (newName) => {
-              if (newName && newName !== currentName) {
-                const newPath = normalizePath(`${parentPath}/${newName}`);
-                const folder = this.app.vault.getAbstractFileByPath(path);
-                if (folder instanceof TFolder) {
-                  await this.app.fileManager.renameFile(folder, newPath);
-                  this.selectedPath = newPath;
-                  new Notice("文件夹重命名成功！");
-                  this.render();
+            new InputModal(this.app, "重命名文件夹", "新文件夹名称", "请输入新文件夹名称...", currentName, (newName) => {
+              void (async () => {
+                if (newName && newName !== currentName) {
+                  const newPath = normalizePath(`${parentPath}/${newName}`);
+                  const folder = this.app.vault.getAbstractFileByPath(path);
+                  if (folder instanceof TFolder) {
+                    await this.app.fileManager.renameFile(folder, newPath);
+                    this.selectedPath = newPath;
+                    new Notice("文件夹重命名成功！");
+                    this.render();
+                  }
                 }
-              }
+              })();
             }).open();
           } else {
             // Rename File
@@ -285,24 +301,28 @@ export class SpaceExplorerView extends ItemView {
             const extMatch = path.match(/\.[^/.]+$/);
             const ext = extMatch ? extMatch[0] : '';
             const baseName = extMatch ? path.substring(lastSlash + 1, path.length - ext.length) : path.substring(lastSlash + 1);
-            new InputModal(this.app, "重命名笔记", "新笔记名称", "请输入新笔记名称...", baseName, async (newName) => {
-              if (newName && newName !== baseName) {
-                const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
-                const file = this.app.vault.getAbstractFileByPath(path);
-                if (file instanceof TFile) {
-                  await this.app.fileManager.renameFile(file, newPath);
-                  this.selectedPath = newPath;
-                  new Notice("文件重命名成功！");
-                  this.render();
+            new InputModal(this.app, "重命名笔记", "新笔记名称", "请输入新笔记名称...", baseName, (newName) => {
+              void (async () => {
+                if (newName && newName !== baseName) {
+                  const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
+                  const file = this.app.vault.getAbstractFileByPath(path);
+                  if (file instanceof TFile) {
+                    await this.app.fileManager.renameFile(file, newPath);
+                    this.selectedPath = newPath;
+                    new Notice("文件重命名成功！");
+                    this.render();
+                  }
                 }
-              }
+              })();
             }).open();
           }
         } else {
-          new SpaceModal(this.app, async (name, icon, color) => {
-            await this.spaceManager.updateSpace(activeSpace.id, { name, icon, color });
-            this.render();
-            this.app.workspace.trigger('vps-space-updated', activeSpace.id);
+          new SpaceModal(this.app, (name, icon, color) => {
+            void (async () => {
+              await this.spaceManager.updateSpace(activeSpace.id, { name, icon, color });
+              this.render();
+              this.app.workspace.trigger('vps-space-updated', activeSpace.id);
+            })();
           }, activeSpace).open();
         }
       });
@@ -311,7 +331,7 @@ export class SpaceExplorerView extends ItemView {
       const deleteBtn = headerActions.createDiv({ cls: 'vps-space-action-btn' });
       setIcon(deleteBtn, 'trash-2');
       deleteBtn.setAttribute('title', '删除空间/移出/物理删除');
-      deleteBtn.addEventListener('click', async (e) => {
+      deleteBtn.addEventListener('click', (e) => { void (async (e: MouseEvent) => {
         e.stopPropagation();
         if (this.selectedPath) {
           if (this.selectedIsFolder) {
@@ -362,7 +382,7 @@ export class SpaceExplorerView extends ItemView {
             this.app.workspace.trigger('vps-space-deleted', activeSpace.id);
           }
         }
-      });
+      })(e); });
     }
 
     // Add global click listener on container to clear selection
@@ -431,17 +451,19 @@ export class SpaceExplorerView extends ItemView {
         spaceItem.removeClass('drag-over');
       });
 
-      spaceItem.addEventListener('drop', async (e: DragEvent) => {
-        if (e.dataTransfer) {
-          const draggedId = e.dataTransfer.getData('vps-space-drag');
-          if (draggedId && draggedId !== space.id) {
-            e.preventDefault();
-            e.stopPropagation();
-            spaceItem.removeClass('drag-over');
-            await this.spaceManager.reorderSpaces(draggedId, space.id);
-            this.render();
+      spaceItem.addEventListener('drop', (e: DragEvent) => {
+        void (async () => {
+          if (e.dataTransfer) {
+            const draggedId = e.dataTransfer.getData('vps-space-drag');
+            if (draggedId && draggedId !== space.id) {
+              e.preventDefault();
+              e.stopPropagation();
+              spaceItem.removeClass('drag-over');
+              await this.spaceManager.reorderSpaces(draggedId, space.id);
+              this.render();
+            }
           }
-        }
+        })();
       });
     });
 
@@ -480,7 +502,7 @@ export class SpaceExplorerView extends ItemView {
           treeContainer.removeClass('drag-over');
         });
 
-        treeContainer.addEventListener('drop', async (e: DragEvent) => {
+        treeContainer.addEventListener('drop', (e: DragEvent) => { void (async () => {
           const target = e.target as HTMLElement;
           if (target === treeContainer || target.classList.contains('vps-tree-title') || target.classList.contains('vps-tree-header') || treeContainer.classList.contains('drag-over')) {
             e.preventDefault();
@@ -527,7 +549,7 @@ export class SpaceExplorerView extends ItemView {
               }
             }
           }
-        });
+        })(); });
       }
     }
   }
@@ -632,45 +654,47 @@ export class SpaceExplorerView extends ItemView {
             item.setTitle('复制文件夹')
               .setIcon('copy')
               .onClick(() => {
-                new InputModal(this.app, "复制文件夹", "新文件夹名称", "请输入新文件夹名称...", "", async (folderName) => {
-                  if (folderName) {
-                    const path = childNode.path;
-                    const lastSlash = path.lastIndexOf('/');
-                    const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : '';
-                    const newFolderPath = normalizePath(`${parentPath}/${folderName}`);
-                    if (await this.app.vault.adapter.exists(newFolderPath)) {
-                      new Notice("目标文件夹已存在！");
-                      return;
-                    }
-                    await this.app.vault.createFolder(newFolderPath);
-                    
-                    const files = this.app.vault.getFiles();
-                    const sourcePrefix = path + '/';
-                    for (const file of files) {
-                      if (file.path.startsWith(sourcePrefix)) {
-                        const relativePath = file.path.substring(sourcePrefix.length);
-                        const destPath = normalizePath(`${newFolderPath}/${relativePath}`);
-                        const destLastSlash = destPath.lastIndexOf('/');
-                        if (destLastSlash !== -1) {
-                          const destParent = destPath.substring(0, destLastSlash);
-                          if (!(await this.app.vault.adapter.exists(destParent))) {
-                            await this.app.vault.createFolder(destParent);
+                new InputModal(this.app, "复制文件夹", "新文件夹名称", "请输入新文件夹名称...", "", (folderName) => {
+                  void (async () => {
+                    if (folderName) {
+                      const path = childNode.path;
+                      const lastSlash = path.lastIndexOf('/');
+                      const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : '';
+                      const newFolderPath = normalizePath(`${parentPath}/${folderName}`);
+                      if (await this.app.vault.adapter.exists(newFolderPath)) {
+                        new Notice("目标文件夹已存在！");
+                        return;
+                      }
+                      await this.app.vault.createFolder(newFolderPath);
+                      
+                      const files = this.app.vault.getFiles();
+                      const sourcePrefix = path + '/';
+                      for (const file of files) {
+                        if (file.path.startsWith(sourcePrefix)) {
+                          const relativePath = file.path.substring(sourcePrefix.length);
+                          const destPath = normalizePath(`${newFolderPath}/${relativePath}`);
+                          const destLastSlash = destPath.lastIndexOf('/');
+                          if (destLastSlash !== -1) {
+                            const destParent = destPath.substring(0, destLastSlash);
+                            if (!(await this.app.vault.adapter.exists(destParent))) {
+                              await this.app.vault.createFolder(destParent);
+                            }
                           }
-                        }
-                        await this.app.vault.copy(file, destPath);
-                        
-                        const space = this.spaceManager.getSpace(spaceId);
-                        if (space) {
-                          const isSubfolder = space.folders.some(f => destPath.startsWith(f === '/' ? '' : f + '/'));
-                          if (!isSubfolder) {
-                            await this.spaceManager.addFileToSpace(spaceId, destPath);
+                          await this.app.vault.copy(file, destPath);
+                          
+                          const space = this.spaceManager.getSpace(spaceId);
+                          if (space) {
+                            const isSubfolder = space.folders.some(f => destPath.startsWith(f === '/' ? '' : f + '/'));
+                            if (!isSubfolder) {
+                              await this.spaceManager.addFileToSpace(spaceId, destPath);
+                            }
                           }
                         }
                       }
+                      new Notice("文件夹复制成功！");
+                      this.render();
                     }
-                    new Notice("文件夹复制成功！");
-                    this.render();
-                  }
+                  })();
                 }).open();
               });
           });
@@ -684,19 +708,21 @@ export class SpaceExplorerView extends ItemView {
                 const lastSlash = path.lastIndexOf('/');
                 const parentPath = lastSlash !== -1 ? path.substring(0, lastSlash) : '';
                 const currentName = lastSlash !== -1 ? path.substring(lastSlash + 1) : path;
-                new InputModal(this.app, "重命名文件夹", "新文件夹名称", "请输入新文件夹名称...", currentName, async (newName) => {
-                  if (newName && newName !== currentName) {
-                    const newPath = normalizePath(`${parentPath}/${newName}`);
-                    const folder = this.app.vault.getAbstractFileByPath(path);
-                    if (folder instanceof TFolder) {
-                      await this.app.fileManager.renameFile(folder, newPath);
-                      if (this.selectedPath === path) {
-                        this.selectedPath = newPath;
+                new InputModal(this.app, "重命名文件夹", "新文件夹名称", "请输入新文件夹名称...", currentName, (newName) => {
+                  void (async () => {
+                    if (newName && newName !== currentName) {
+                      const newPath = normalizePath(`${parentPath}/${newName}`);
+                      const folder = this.app.vault.getAbstractFileByPath(path);
+                      if (folder instanceof TFolder) {
+                        await this.app.fileManager.renameFile(folder, newPath);
+                        if (this.selectedPath === path) {
+                          this.selectedPath = newPath;
+                        }
+                        new Notice("文件夹重命名成功！");
+                        this.render();
                       }
-                      new Notice("文件夹重命名成功！");
-                      this.render();
                     }
-                  }
+                  })();
                 }).open();
               });
           });
@@ -766,23 +792,25 @@ export class SpaceExplorerView extends ItemView {
                 const extMatch = path.match(/\.[^/.]+$/);
                 const ext = extMatch ? extMatch[0] : '';
                 const baseName = extMatch ? path.substring(lastSlash + 1, path.length - ext.length) : path.substring(lastSlash + 1);
-                new InputModal(this.app, "复制笔记", "新笔记名称", "请输入新笔记名称...", `${baseName}_copy`, async (newName) => {
-                  if (newName) {
-                    const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
-                    const file = this.app.vault.getAbstractFileByPath(path);
-                    if (file instanceof TFile) {
-                      await this.app.vault.copy(file, newPath);
-                      const space = this.spaceManager.getSpace(spaceId);
-                      if (space) {
-                        const isSubfolder = space.folders.some(f => newPath.startsWith(f === '/' ? '' : f + '/'));
-                        if (!isSubfolder) {
-                          await this.spaceManager.addFileToSpace(spaceId, newPath);
+                new InputModal(this.app, "复制笔记", "新笔记名称", "请输入新笔记名称...", `${baseName}_copy`, (newName) => {
+                  void (async () => {
+                    if (newName) {
+                      const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
+                      const file = this.app.vault.getAbstractFileByPath(path);
+                      if (file instanceof TFile) {
+                        await this.app.vault.copy(file, newPath);
+                        const space = this.spaceManager.getSpace(spaceId);
+                        if (space) {
+                          const isSubfolder = space.folders.some(f => newPath.startsWith(f === '/' ? '' : f + '/'));
+                          if (!isSubfolder) {
+                            await this.spaceManager.addFileToSpace(spaceId, newPath);
+                          }
                         }
+                        new Notice("文件复制成功！");
+                        this.render();
                       }
-                      new Notice("文件复制成功！");
-                      this.render();
                     }
-                  }
+                  })();
                 }).open();
               });
           });
@@ -798,19 +826,21 @@ export class SpaceExplorerView extends ItemView {
                 const extMatch = path.match(/\.[^/.]+$/);
                 const ext = extMatch ? extMatch[0] : '';
                 const baseName = extMatch ? path.substring(lastSlash + 1, path.length - ext.length) : path.substring(lastSlash + 1);
-                new InputModal(this.app, "重命名笔记", "新笔记名称", "请输入新笔记名称...", baseName, async (newName) => {
-                  if (newName && newName !== baseName) {
-                    const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
-                    const file = this.app.vault.getAbstractFileByPath(path);
-                    if (file instanceof TFile) {
-                      await this.app.fileManager.renameFile(file, newPath);
-                      if (this.selectedPath === path) {
-                        this.selectedPath = newPath;
+                new InputModal(this.app, "重命名笔记", "新笔记名称", "请输入新笔记名称...", baseName, (newName) => {
+                  void (async () => {
+                    if (newName && newName !== baseName) {
+                      const newPath = normalizePath(`${parentPath}/${newName}${ext}`);
+                      const file = this.app.vault.getAbstractFileByPath(path);
+                      if (file instanceof TFile) {
+                        await this.app.fileManager.renameFile(file, newPath);
+                        if (this.selectedPath === path) {
+                          this.selectedPath = newPath;
+                        }
+                        new Notice("文件重命名成功！");
+                        this.render();
                       }
-                      new Notice("文件重命名成功！");
-                      this.render();
                     }
-                  }
+                  })();
                 }).open();
               });
           });
@@ -877,7 +907,7 @@ export class SpaceExplorerView extends ItemView {
         nodeEl.removeClass('drag-over');
       });
 
-      nodeEl.addEventListener('drop', async (e: DragEvent) => {
+      nodeEl.addEventListener('drop', (e: DragEvent) => { void (async () => {
         e.preventDefault();
         e.stopPropagation();
         nodeEl.removeClass('drag-over');
@@ -967,7 +997,7 @@ export class SpaceExplorerView extends ItemView {
             this.render();
           }
         }
-      });
+      })(); });
 
       if (childNode.isFolder) {
         nodeEl.addEventListener('click', (e) => {
@@ -998,7 +1028,10 @@ export class SpaceExplorerView extends ItemView {
           this.selectedIsFolder = false;
           this.render();
           if (childNode.file) {
-            void this.app.workspace.getLeaf(e.ctrlKey || e.metaKey).openFile(childNode.file);
+            const leaf = (e.ctrlKey || e.metaKey)
+              ? this.app.workspace.getLeaf('tab')
+              : this.app.workspace.getLeaf(false);
+            void leaf.openFile(childNode.file);
           }
         });
       }
