@@ -71,6 +71,62 @@ class TodoModal extends Modal {
   }
 }
 
+class MemoModal extends Modal {
+  private onSubmit: (text: string) => void;
+  private text: string = "";
+  private titleText: string;
+  private buttonText: string;
+
+  constructor(app: App, titleText: string, buttonText: string, initialText: string, onSubmit: (text: string) => void) {
+    super(app);
+    this.titleText = titleText;
+    this.buttonText = buttonText;
+    this.text = initialText;
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl("h2", { text: this.titleText });
+
+    new Setting(contentEl)
+      .setName("备忘内容")
+      .addTextArea(text => {
+        text.inputEl.style.width = "100%";
+        text.inputEl.style.height = "120px";
+        text
+          .setValue(this.text)
+          .setPlaceholder("请输入备忘事项内容")
+          .onChange(value => {
+            this.text = value;
+          });
+      });
+
+    new Setting(contentEl)
+      .addButton(btn => btn
+        .setButtonText(this.buttonText)
+        .setCta()
+        .onClick(() => {
+          if (this.text.trim()) {
+            this.onSubmit(this.text.trim());
+            this.close();
+          }
+        })
+      )
+      .addButton(btn => btn
+        .setButtonText("取消")
+        .onClick(() => {
+          this.close();
+        })
+      );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
 export class SpaceDashboardView extends ItemView {
   private spaceManager: SpaceManager;
   private spaceId?: string;
@@ -341,6 +397,187 @@ export class SpaceDashboardView extends ItemView {
         });
       });
     }
+
+    // Card C: Memo List
+    const memoCard = grid.createDiv({ cls: "vps-dashboard-card" });
+    const memoHeader = memoCard.createDiv({
+      cls: "vps-dashboard-card-title",
+      text: "📝 备忘录",
+    });
+
+    const memoActions = memoHeader.createDiv({ cls: "vps-quick-actions" });
+    const addMemoBtn = memoActions.createEl("button", {
+      cls: "vps-btn-icon",
+      title: "添加备忘"
+    });
+    setIcon(addMemoBtn, "plus");
+    
+    addMemoBtn.style.cssText = "background: none; border: none; padding: 2px; cursor: pointer; color: var(--text-muted); display: flex; align-items: center;";
+    addMemoBtn.addEventListener("mouseenter", () => { addMemoBtn.style.color = "var(--text-normal)"; });
+    addMemoBtn.addEventListener("mouseleave", () => { addMemoBtn.style.color = "var(--text-muted)"; });
+
+    const openAddMemoModal = () => {
+      new MemoModal(this.app, "添加备忘录", "添加", "", async (text) => {
+        const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+        if (currentSpace) {
+          if (!currentSpace.memos) currentSpace.memos = [];
+          currentSpace.memos.push({
+            id: Math.random().toString(36).substring(2, 11),
+            text,
+            updatedAt: this.getJSTTimestamp()
+          });
+          await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+        }
+      }).open();
+    };
+
+    addMemoBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openAddMemoModal();
+    });
+
+    const memoList = memoCard.createDiv({ cls: "vps-memo-list" });
+    memoList.style.cssText =
+      "max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;";
+
+    // Context Menu for Memo Card
+    memoCard.addEventListener("contextmenu", (event: MouseEvent) => {
+      event.preventDefault();
+      const menu = new Menu();
+      menu.addItem((item) => {
+        item.setTitle("添加备忘")
+          .setIcon("plus")
+          .onClick(() => {
+            openAddMemoModal();
+          });
+      });
+
+      const target = event.target as HTMLElement;
+      const memoItemEl = target.closest(".vps-memo-item");
+      if (memoItemEl) {
+        const memoId = memoItemEl.getAttribute("data-memo-id");
+        if (memoId) {
+          menu.addSeparator();
+          menu.addItem((item) => {
+            item.setTitle("编辑备忘")
+              .setIcon("pencil")
+              .onClick(() => {
+                const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+                const memo = currentSpace?.memos?.find(m => m.id === memoId);
+                if (memo) {
+                  new MemoModal(this.app, "修改备忘录", "保存", memo.text, async (newText) => {
+                    memo.text = newText;
+                    memo.updatedAt = this.getJSTTimestamp();
+                    await this.spaceManager.updateSpace(currentSpace!.id, { memos: currentSpace!.memos });
+                  }).open();
+                }
+              });
+          });
+          menu.addItem((item) => {
+            item.setTitle("删除备忘")
+              .setIcon("trash")
+              .onClick(async () => {
+                const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+                if (currentSpace && currentSpace.memos) {
+                  currentSpace.memos = currentSpace.memos.filter(m => m.id !== memoId);
+                  await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+                }
+              });
+          });
+        }
+      }
+      menu.showAtPosition({ x: event.clientX, y: event.clientY });
+    });
+
+    const displayedMemos = (space.memos || []).slice().reverse(); // Show newest first
+
+    if (displayedMemos.length === 0) {
+      memoList.createDiv({
+        text: "暂无备忘信息，双击或点击右上角按钮添加",
+        cls: "vps-space-meta",
+      });
+      // Double click to add memo on empty area
+      memoList.addEventListener("dblclick", (e) => {
+        if (e.target === memoList) {
+          openAddMemoModal();
+        }
+      });
+    } else {
+      displayedMemos.forEach((memo) => {
+        const memoItem = memoList.createDiv({
+          cls: "vps-memo-item",
+        });
+        memoItem.setAttribute("data-memo-id", memo.id);
+
+        const memoContent = memoItem.createDiv({
+          cls: "vps-memo-text",
+          text: memo.text,
+        });
+
+        // Double click text to edit
+        memoContent.addEventListener("dblclick", (e) => {
+          e.stopPropagation();
+          new MemoModal(this.app, "修改备忘录", "保存", memo.text, async (newText) => {
+            const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+            if (currentSpace && currentSpace.memos) {
+              const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
+              if (targetMemo) {
+                targetMemo.text = newText;
+                targetMemo.updatedAt = this.getJSTTimestamp();
+                await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+              }
+            }
+          }).open();
+        });
+
+        const memoFooter = memoItem.createDiv({
+          cls: "vps-memo-footer",
+        });
+
+        memoFooter.createDiv({
+          cls: "vps-memo-time",
+          text: memo.updatedAt,
+        });
+
+        const memoItemActions = memoFooter.createDiv({
+          cls: "vps-memo-actions",
+        });
+
+        const editBtn = memoItemActions.createEl("span", {
+          cls: "vps-memo-action-btn edit-btn",
+          title: "编辑"
+        });
+        setIcon(editBtn, "pencil");
+        editBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          new MemoModal(this.app, "修改备忘录", "保存", memo.text, async (newText) => {
+            const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+            if (currentSpace && currentSpace.memos) {
+              const targetMemo = currentSpace.memos.find(m => m.id === memo.id);
+              if (targetMemo) {
+                targetMemo.text = newText;
+                targetMemo.updatedAt = this.getJSTTimestamp();
+                await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+              }
+            }
+          }).open();
+        });
+
+        const deleteBtn = memoItemActions.createEl("span", {
+          cls: "vps-memo-action-btn delete-btn",
+          title: "删除"
+        });
+        setIcon(deleteBtn, "trash");
+        deleteBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const currentSpace = this.spaceManager.getSpace(this.spaceId!);
+          if (currentSpace && currentSpace.memos) {
+            currentSpace.memos = currentSpace.memos.filter(m => m.id !== memo.id);
+            await this.spaceManager.updateSpace(currentSpace.id, { memos: currentSpace.memos });
+          }
+        });
+      });
+    }
   }
 
   private async scanTasks(space: ProjectSpace): Promise<SpaceTask[]> {
@@ -449,5 +686,17 @@ export class SpaceDashboardView extends ItemView {
     const g = parseInt(hex.substring(3, 5), 16);
     const b = parseInt(hex.substring(5, 7), 16);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  private getJSTTimestamp(date: Date = new Date()): string {
+    return date.toLocaleString("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).replace(/\//g, "-") + " (JST)";
   }
 }

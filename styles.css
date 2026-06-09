@@ -550,3 +550,86 @@
   transform: translateY(-1px);
 }
 
+/* 5. Memo Area Styles */
+.vps-memo-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.vps-memo-item {
+  background-color: var(--background-primary);
+  border: 1px solid var(--vps-card-border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: var(--vps-transition);
+  position: relative;
+}
+
+.vps-memo-item:hover {
+  border-color: var(--vps-card-hover-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.vps-memo-text {
+  font-size: 0.95em;
+  color: var(--text-normal);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.vps-memo-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--vps-card-border);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.vps-memo-time {
+  font-size: 0.75em;
+  color: var(--vps-text-muted);
+}
+
+.vps-memo-actions {
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.vps-memo-item:hover .vps-memo-actions {
+  opacity: 1;
+}
+
+.vps-memo-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: var(--vps-transition);
+}
+
+.vps-memo-action-btn:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+  transform: scale(1.1);
+}
+
+.vps-memo-action-btn.delete-btn:hover {
+  color: var(--background-modifier-error, #d32f2f);
+}
+

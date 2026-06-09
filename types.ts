@@ -14,6 +14,12 @@ export interface SpaceCustomTask {
   completed: boolean;
 }
 
+export interface SpaceMemo {
+  id: string;
+  text: string;
+  updatedAt: string;
+}
+
 export interface ProjectSpace {
   id: string;
   name: string;
@@ -31,6 +37,7 @@ export interface ProjectSpace {
   lastSavedFolderPath?: string; // Last saved folder path for this specific project space
   hideCompletedTasks?: boolean;
   tasks?: SpaceCustomTask[];
+  memos?: SpaceMemo[];
 }
 
 export interface PluginSettings {
