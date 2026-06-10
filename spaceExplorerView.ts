@@ -18,6 +18,7 @@ export class SpaceExplorerView extends ItemView {
   private expandedPaths: Set<string> = new Set<string>();
   private selectedPath: string | null = null;
   private selectedIsFolder: boolean = false;
+  private shouldScrollToSelected: boolean = false;
 
   constructor(leaf: WorkspaceLeaf, spaceManager: SpaceManager) {
     super(leaf);
@@ -487,9 +488,53 @@ export class SpaceExplorerView extends ItemView {
     if (activeSpaceId) {
       const activeSpace = this.spaceManager.getSpace(activeSpaceId);
       if (activeSpace) {
-        const treeContainer = container.createDiv({ cls: 'vps-tree-container' });
+        // Render tree header (Fixed outside scroll area)
+        const treeHeader = container.createDiv({ cls: 'vps-tree-header' });
+        treeHeader.createDiv({ cls: 'vps-tree-title', text: '文件列表' });
         
+        const treeActions = treeHeader.createDiv({ cls: 'vps-explorer-header-actions' });
+        treeActions.addEventListener('click', (e) => e.stopPropagation());
 
+        // Collapse all button
+        const collapseBtn = treeActions.createDiv({ cls: 'vps-space-action-btn' });
+        setIcon(collapseBtn, 'fold-vertical');
+        collapseBtn.setAttribute('title', '折叠所有文件夹');
+        collapseBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.expandedPaths.clear();
+          this.render();
+        });
+
+        // Locate current file button
+        const locateBtn = treeActions.createDiv({ cls: 'vps-space-action-btn' });
+        setIcon(locateBtn, 'locate');
+        locateBtn.setAttribute('title', '定位当前文件');
+        locateBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const activeFile = this.app.workspace.getActiveFile();
+          if (activeFile) {
+            const spaceFiles = this.spaceManager.getSpaceFiles(activeSpaceId);
+            const isInSpace = spaceFiles.some(f => f.path === activeFile.path);
+            if (isInSpace) {
+              // Expand all parent directories
+              const parts = activeFile.path.split('/');
+              for (let i = 1; i < parts.length; i++) {
+                const parentPath = parts.slice(0, i).join('/');
+                this.expandedPaths.add(parentPath);
+              }
+              this.selectedPath = activeFile.path;
+              this.selectedIsFolder = false;
+              this.shouldScrollToSelected = true;
+              this.render();
+            } else {
+              new Notice('当前文件不在当前项目空间中。');
+            }
+          } else {
+            new Notice('没有处于活动状态的编辑文件。');
+          }
+        });
+
+        const treeContainer = container.createDiv({ cls: 'vps-tree-container' });
 
         // Build Virtual Folder Tree
         const files = this.spaceManager.getSpaceFiles(activeSpaceId);
@@ -505,67 +550,74 @@ export class SpaceExplorerView extends ItemView {
         }
 
         // Drop on root area to move to vault root
+        const handleDragOver = (e: DragEvent) => {
+          e.preventDefault();
+          treeContainer.addClass('drag-over');
+        };
+
         treeContainer.addEventListener('dragover', (e: DragEvent) => {
-          // Only highlight root if we're not dropping directly on a child node
           const target = e.target as HTMLElement;
-          if (target === treeContainer || target.classList.contains('vps-tree-title') || target.classList.contains('vps-tree-header')) {
+          if (target === treeContainer || target.classList.contains('vps-tree-node')) {
             e.preventDefault();
             treeContainer.addClass('drag-over');
           }
         });
+        treeHeader.addEventListener('dragover', handleDragOver);
 
-        treeContainer.addEventListener('dragleave', (e: DragEvent) => {
+        const handleDragLeave = () => {
           treeContainer.removeClass('drag-over');
-        });
+        };
+        treeContainer.addEventListener('dragleave', handleDragLeave);
+        treeHeader.addEventListener('dragleave', handleDragLeave);
 
-        treeContainer.addEventListener('drop', (e: DragEvent) => { void (async () => {
-          const target = e.target as HTMLElement;
-          if (target === treeContainer || target.classList.contains('vps-tree-title') || target.classList.contains('vps-tree-header') || treeContainer.classList.contains('drag-over')) {
-            e.preventDefault();
-            e.stopPropagation();
-            treeContainer.removeClass('drag-over');
+        const handleDrop = (e: DragEvent) => { void (async () => {
+          e.preventDefault();
+          e.stopPropagation();
+          treeContainer.removeClass('drag-over');
 
-            if (e.dataTransfer) {
-              const dragPath = e.dataTransfer.getData('text/plain');
-              const sourceSpaceId = e.dataTransfer.getData('source-space-id');
-              if (!dragPath) return;
+          if (e.dataTransfer) {
+            const dragPath = e.dataTransfer.getData('text/plain');
+            const sourceSpaceId = e.dataTransfer.getData('source-space-id');
+            if (!dragPath) return;
 
-              const dragFile = this.app.vault.getAbstractFileByPath(dragPath);
-              if (dragFile) {
-                const newDestPath = normalizePath(dragFile.name);
-                if (dragPath !== newDestPath) {
-                  try {
-                    await this.app.fileManager.renameFile(dragFile, newDestPath);
-                    new Notice(`物理移动至根目录: ${newDestPath}`);
+            const dragFile = this.app.vault.getAbstractFileByPath(dragPath);
+            if (dragFile) {
+              const newDestPath = normalizePath(dragFile.name);
+              if (dragPath !== newDestPath) {
+                try {
+                  await this.app.fileManager.renameFile(dragFile, newDestPath);
+                  new Notice(`物理移动至根目录: ${newDestPath}`);
 
-                    if (dragFile instanceof TFile) {
-                      if (sourceSpaceId && sourceSpaceId !== activeSpaceId) {
-                        await this.spaceManager.removeFileFromSpace(sourceSpaceId, dragPath);
-                      }
-                      
-                      const space = this.spaceManager.getSpace(activeSpaceId);
-                      if (space) {
-                        const isSubfolder = space.folders.some(f => newDestPath.startsWith(f === '/' ? '' : f + '/'));
-                        if (!isSubfolder) {
-                          await this.spaceManager.addFileToSpace(activeSpaceId, newDestPath);
-                        }
-                      }
-                    } else if (dragFile instanceof TFolder) {
-                      if (sourceSpaceId) {
-                        await this.spaceManager.removeFolderFromSpace(sourceSpaceId, dragPath);
-                      }
-                      await this.spaceManager.addFolderToSpace(activeSpaceId, newDestPath);
+                  if (dragFile instanceof TFile) {
+                    if (sourceSpaceId && sourceSpaceId !== activeSpaceId) {
+                      await this.spaceManager.removeFileFromSpace(sourceSpaceId, dragPath);
                     }
-                  } catch (err) {
-                    console.error("Failed to move item to root", err);
-                    new Notice("移至根目录失败！");
+                    
+                    const space = this.spaceManager.getSpace(activeSpaceId);
+                    if (space) {
+                      const isSubfolder = space.folders.some(f => newDestPath.startsWith(f === '/' ? '' : f + '/'));
+                      if (!isSubfolder) {
+                        await this.spaceManager.addFileToSpace(activeSpaceId, newDestPath);
+                      }
+                    }
+                  } else if (dragFile instanceof TFolder) {
+                    if (sourceSpaceId) {
+                      await this.spaceManager.removeFolderFromSpace(sourceSpaceId, dragPath);
+                    }
+                    await this.spaceManager.addFolderToSpace(activeSpaceId, newDestPath);
                   }
+                } catch (err) {
+                  console.error("Failed to move item to root", err);
+                  new Notice("移至根目录失败！");
                 }
-                this.render();
               }
+              this.render();
             }
           }
-        })(); });
+        })(); };
+
+        treeContainer.addEventListener('drop', handleDrop);
+        treeHeader.addEventListener('drop', handleDrop);
       }
     }
   }
@@ -653,6 +705,13 @@ export class SpaceExplorerView extends ItemView {
       const nodeEl = parentEl.createDiv({ 
         cls: `vps-tree-node vps-tree-node-depth-${depth} ${isSelected ? 'is-selected' : ''}` 
       });
+
+      if (isSelected && this.shouldScrollToSelected) {
+        this.shouldScrollToSelected = false;
+        window.setTimeout(() => {
+          nodeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }, 50);
+      }
       
       const iconEl = nodeEl.createDiv({ cls: 'vps-tree-node-icon' });
       setIcon(iconEl, childNode.isFolder ? (isExpanded ? 'chevron-down' : 'chevron-right') : 'file-text');
@@ -1033,9 +1092,11 @@ export class SpaceExplorerView extends ItemView {
           this.selectedIsFolder = false;
           this.render();
           if (childNode.file) {
-            const leaf = (e.ctrlKey || e.metaKey)
+            const activeLeaf = this.app.workspace.getLeaf(false);
+            const isTabEmpty = activeLeaf && activeLeaf.view && activeLeaf.view.getViewType() === 'empty';
+            const leaf = (e.ctrlKey || e.metaKey || !isTabEmpty)
               ? this.app.workspace.getLeaf('tab')
-              : this.app.workspace.getLeaf(false);
+              : activeLeaf;
             void leaf.openFile(childNode.file);
           }
         });
