@@ -426,6 +426,7 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     this.expandedPaths = /* @__PURE__ */ new Set();
     this.selectedPath = null;
     this.selectedIsFolder = false;
+    this.shouldScrollToSelected = false;
     this.spaceManager = spaceManager;
   }
   getViewType() {
@@ -832,6 +833,44 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
     if (activeSpaceId) {
       const activeSpace2 = this.spaceManager.getSpace(activeSpaceId);
       if (activeSpace2) {
+        const treeHeader = container.createDiv({ cls: "vps-tree-header" });
+        treeHeader.createDiv({ cls: "vps-tree-title", text: "\u6587\u4EF6\u5217\u8868" });
+        const treeActions = treeHeader.createDiv({ cls: "vps-explorer-header-actions" });
+        treeActions.addEventListener("click", (e) => e.stopPropagation());
+        const collapseBtn = treeActions.createDiv({ cls: "vps-space-action-btn" });
+        (0, import_obsidian3.setIcon)(collapseBtn, "fold-vertical");
+        collapseBtn.setAttribute("title", "\u6298\u53E0\u6240\u6709\u6587\u4EF6\u5939");
+        collapseBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.expandedPaths.clear();
+          this.render();
+        });
+        const locateBtn = treeActions.createDiv({ cls: "vps-space-action-btn" });
+        (0, import_obsidian3.setIcon)(locateBtn, "locate");
+        locateBtn.setAttribute("title", "\u5B9A\u4F4D\u5F53\u524D\u6587\u4EF6");
+        locateBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const activeFile = this.app.workspace.getActiveFile();
+          if (activeFile) {
+            const spaceFiles = this.spaceManager.getSpaceFiles(activeSpaceId);
+            const isInSpace = spaceFiles.some((f) => f.path === activeFile.path);
+            if (isInSpace) {
+              const parts = activeFile.path.split("/");
+              for (let i = 1; i < parts.length; i++) {
+                const parentPath = parts.slice(0, i).join("/");
+                this.expandedPaths.add(parentPath);
+              }
+              this.selectedPath = activeFile.path;
+              this.selectedIsFolder = false;
+              this.shouldScrollToSelected = true;
+              this.render();
+            } else {
+              new import_obsidian3.Notice("\u5F53\u524D\u6587\u4EF6\u4E0D\u5728\u5F53\u524D\u9879\u76EE\u7A7A\u95F4\u4E2D\u3002");
+            }
+          } else {
+            new import_obsidian3.Notice("\u6CA1\u6709\u5904\u4E8E\u6D3B\u52A8\u72B6\u6001\u7684\u7F16\u8F91\u6587\u4EF6\u3002");
+          }
+        });
         const treeContainer = container.createDiv({ cls: "vps-tree-container" });
         const files = this.spaceManager.getSpaceFiles(activeSpaceId);
         const folders = this.spaceManager.getSpaceFolders(activeSpaceId);
@@ -844,63 +883,69 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
           const rootNode = this.buildVirtualTree(files, folders);
           this.renderTreeNodes(treeContainer, rootNode, 0, activeSpaceId);
         }
+        const handleDragOver = (e) => {
+          e.preventDefault();
+          treeContainer.addClass("drag-over");
+        };
         treeContainer.addEventListener("dragover", (e) => {
           const target = e.target;
-          if (target === treeContainer || target.classList.contains("vps-tree-title") || target.classList.contains("vps-tree-header")) {
+          if (target === treeContainer || target.classList.contains("vps-tree-node")) {
             e.preventDefault();
             treeContainer.addClass("drag-over");
           }
         });
-        treeContainer.addEventListener("dragleave", (e) => {
+        treeHeader.addEventListener("dragover", handleDragOver);
+        const handleDragLeave = () => {
           treeContainer.removeClass("drag-over");
-        });
-        treeContainer.addEventListener("drop", (e) => {
+        };
+        treeContainer.addEventListener("dragleave", handleDragLeave);
+        treeHeader.addEventListener("dragleave", handleDragLeave);
+        const handleDrop = (e) => {
           void (async () => {
-            const target = e.target;
-            if (target === treeContainer || target.classList.contains("vps-tree-title") || target.classList.contains("vps-tree-header") || treeContainer.classList.contains("drag-over")) {
-              e.preventDefault();
-              e.stopPropagation();
-              treeContainer.removeClass("drag-over");
-              if (e.dataTransfer) {
-                const dragPath = e.dataTransfer.getData("text/plain");
-                const sourceSpaceId = e.dataTransfer.getData("source-space-id");
-                if (!dragPath)
-                  return;
-                const dragFile = this.app.vault.getAbstractFileByPath(dragPath);
-                if (dragFile) {
-                  const newDestPath = (0, import_obsidian3.normalizePath)(dragFile.name);
-                  if (dragPath !== newDestPath) {
-                    try {
-                      await this.app.fileManager.renameFile(dragFile, newDestPath);
-                      new import_obsidian3.Notice(`\u7269\u7406\u79FB\u52A8\u81F3\u6839\u76EE\u5F55: ${newDestPath}`);
-                      if (dragFile instanceof import_obsidian3.TFile) {
-                        if (sourceSpaceId && sourceSpaceId !== activeSpaceId) {
-                          await this.spaceManager.removeFileFromSpace(sourceSpaceId, dragPath);
-                        }
-                        const space = this.spaceManager.getSpace(activeSpaceId);
-                        if (space) {
-                          const isSubfolder = space.folders.some((f) => newDestPath.startsWith(f === "/" ? "" : f + "/"));
-                          if (!isSubfolder) {
-                            await this.spaceManager.addFileToSpace(activeSpaceId, newDestPath);
-                          }
-                        }
-                      } else if (dragFile instanceof import_obsidian3.TFolder) {
-                        if (sourceSpaceId) {
-                          await this.spaceManager.removeFolderFromSpace(sourceSpaceId, dragPath);
-                        }
-                        await this.spaceManager.addFolderToSpace(activeSpaceId, newDestPath);
+            e.preventDefault();
+            e.stopPropagation();
+            treeContainer.removeClass("drag-over");
+            if (e.dataTransfer) {
+              const dragPath = e.dataTransfer.getData("text/plain");
+              const sourceSpaceId = e.dataTransfer.getData("source-space-id");
+              if (!dragPath)
+                return;
+              const dragFile = this.app.vault.getAbstractFileByPath(dragPath);
+              if (dragFile) {
+                const newDestPath = (0, import_obsidian3.normalizePath)(dragFile.name);
+                if (dragPath !== newDestPath) {
+                  try {
+                    await this.app.fileManager.renameFile(dragFile, newDestPath);
+                    new import_obsidian3.Notice(`\u7269\u7406\u79FB\u52A8\u81F3\u6839\u76EE\u5F55: ${newDestPath}`);
+                    if (dragFile instanceof import_obsidian3.TFile) {
+                      if (sourceSpaceId && sourceSpaceId !== activeSpaceId) {
+                        await this.spaceManager.removeFileFromSpace(sourceSpaceId, dragPath);
                       }
-                    } catch (err) {
-                      console.error("Failed to move item to root", err);
-                      new import_obsidian3.Notice("\u79FB\u81F3\u6839\u76EE\u5F55\u5931\u8D25\uFF01");
+                      const space = this.spaceManager.getSpace(activeSpaceId);
+                      if (space) {
+                        const isSubfolder = space.folders.some((f) => newDestPath.startsWith(f === "/" ? "" : f + "/"));
+                        if (!isSubfolder) {
+                          await this.spaceManager.addFileToSpace(activeSpaceId, newDestPath);
+                        }
+                      }
+                    } else if (dragFile instanceof import_obsidian3.TFolder) {
+                      if (sourceSpaceId) {
+                        await this.spaceManager.removeFolderFromSpace(sourceSpaceId, dragPath);
+                      }
+                      await this.spaceManager.addFolderToSpace(activeSpaceId, newDestPath);
                     }
+                  } catch (err) {
+                    console.error("Failed to move item to root", err);
+                    new import_obsidian3.Notice("\u79FB\u81F3\u6839\u76EE\u5F55\u5931\u8D25\uFF01");
                   }
-                  this.render();
                 }
+                this.render();
               }
             }
           })();
-        });
+        };
+        treeContainer.addEventListener("drop", handleDrop);
+        treeHeader.addEventListener("drop", handleDrop);
       }
     }
   }
@@ -977,6 +1022,12 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
       const nodeEl = parentEl.createDiv({
         cls: `vps-tree-node vps-tree-node-depth-${depth} ${isSelected ? "is-selected" : ""}`
       });
+      if (isSelected && this.shouldScrollToSelected) {
+        this.shouldScrollToSelected = false;
+        window.setTimeout(() => {
+          nodeEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }, 50);
+      }
       const iconEl = nodeEl.createDiv({ cls: "vps-tree-node-icon" });
       (0, import_obsidian3.setIcon)(iconEl, childNode.isFolder ? isExpanded ? "chevron-down" : "chevron-right" : "file-text");
       nodeEl.createDiv({ cls: "vps-tree-node-name", text: childNode.name });
@@ -1298,7 +1349,9 @@ var SpaceExplorerView = class extends import_obsidian3.ItemView {
           this.selectedIsFolder = false;
           this.render();
           if (childNode.file) {
-            const leaf = e.ctrlKey || e.metaKey ? this.app.workspace.getLeaf("tab") : this.app.workspace.getLeaf(false);
+            const activeLeaf = this.app.workspace.getLeaf(false);
+            const isTabEmpty = activeLeaf && activeLeaf.view && activeLeaf.view.getViewType() === "empty";
+            const leaf = e.ctrlKey || e.metaKey || !isTabEmpty ? this.app.workspace.getLeaf("tab") : activeLeaf;
             void leaf.openFile(childNode.file);
           }
         });
@@ -2183,6 +2236,7 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
     this.isSavePending = false;
+    this.lastActiveTabPath = void 0;
     this.debouncedSave = debounce(() => {
       void this.performSave();
     }, 1e3);
@@ -2196,6 +2250,38 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
         await this.savePluginSettings();
         this.updateViews();
       }
+    );
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", (leaf) => {
+        if (!leaf) {
+          let hasMarkdown = false;
+          this.app.workspace.iterateRootLeaves((l) => {
+            if (l.view instanceof import_obsidian7.MarkdownView) {
+              hasMarkdown = true;
+            }
+          });
+          if (!hasMarkdown) {
+            this.lastActiveTabPath = void 0;
+          }
+          return;
+        }
+        let isRootLeaf = false;
+        this.app.workspace.iterateRootLeaves((l) => {
+          if (l === leaf) {
+            isRootLeaf = true;
+          }
+        });
+        if (isRootLeaf) {
+          if (leaf.view instanceof import_obsidian7.MarkdownView) {
+            const file = leaf.view.file;
+            if (file instanceof import_obsidian7.TFile) {
+              this.lastActiveTabPath = file.path;
+            }
+          } else if (leaf.view.getViewType() === VIEW_TYPE_SPACE_DASHBOARD) {
+            this.lastActiveTabPath = void 0;
+          }
+        }
+      })
     );
     this.registerView(
       VIEW_TYPE_SPACE_EXPLORER,
@@ -2486,46 +2572,49 @@ var VirtualProjectSpacePlugin = class extends import_obsidian7.Plugin {
             }
           }
         });
-        const activeFile = this.app.workspace.getActiveFile();
         await this.spaceManager.updateSpace(oldSpaceId, {
           workspace: {
             openTabs,
-            activeTab: activeFile?.path
+            activeTab: this.lastActiveTabPath
           }
         });
       }
     }
+    const leavesToDetach = [];
     this.app.workspace.iterateRootLeaves((leaf) => {
       if (leaf.view.getViewType() === "markdown") {
-        leaf.detach();
+        leavesToDetach.push(leaf);
       }
     });
+    leavesToDetach.forEach((leaf) => leaf.detach());
     this.settings.activeSpaceId = spaceId;
     await this.savePluginSettings();
     this.updateViews();
     const newSpace = this.spaceManager.getSpace(spaceId);
+    let activeLeaf = null;
     if (newSpace && newSpace.workspace && newSpace.workspace.openTabs) {
       const workspace = newSpace.workspace;
+      const activeTab = workspace.activeTab;
+      this.lastActiveTabPath = activeTab;
       for (const filePath of workspace.openTabs) {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof import_obsidian7.TFile) {
-          await this.app.workspace.getLeaf("tab").openFile(file);
-        }
-      }
-      const activeTab = workspace.activeTab;
-      if (activeTab) {
-        this.app.workspace.iterateRootLeaves((leaf) => {
-          if (leaf.view instanceof import_obsidian7.MarkdownView) {
-            const file = leaf.view.file;
-            if (file instanceof import_obsidian7.TFile && file.path === activeTab) {
-              this.app.workspace.setActiveLeaf(leaf, { focus: true });
-            }
+          const leaf = this.app.workspace.getLeaf("tab");
+          await leaf.openFile(file);
+          if (filePath === activeTab) {
+            activeLeaf = leaf;
           }
-        });
+        }
       }
     }
     if (this.settings.enableDashboard) {
-      void this.openDashboard(spaceId);
+      await this.openDashboard(spaceId);
+    }
+    if (activeLeaf) {
+      const targetLeaf = activeLeaf;
+      window.setTimeout(() => {
+        void this.app.workspace.revealLeaf(targetLeaf);
+      }, 100);
     }
   }
   async activateExplorerView() {
