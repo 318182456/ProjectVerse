@@ -18,6 +18,7 @@ export default class VirtualProjectSpacePlugin extends Plugin {
   settings: PluginSettings = DEFAULT_SETTINGS;
   spaceManager!: SpaceManager;
   private isSavePending = false;
+  private lastActiveTabPath: string | undefined = undefined;
   private debouncedSave = debounce(() => {
     void this.performSave();
   }, 1000);
@@ -32,6 +33,42 @@ export default class VirtualProjectSpacePlugin extends Plugin {
         await this.savePluginSettings();
         this.updateViews();
       }
+    );
+
+    // Register active tab tracker
+    this.registerEvent(
+      this.app.workspace.on('active-leaf-change', (leaf) => {
+        if (!leaf) {
+          let hasMarkdown = false;
+          this.app.workspace.iterateRootLeaves((l) => {
+            if (l.view instanceof MarkdownView) {
+              hasMarkdown = true;
+            }
+          });
+          if (!hasMarkdown) {
+            this.lastActiveTabPath = undefined;
+          }
+          return;
+        }
+
+        let isRootLeaf = false;
+        this.app.workspace.iterateRootLeaves((l) => {
+          if (l === leaf) {
+            isRootLeaf = true;
+          }
+        });
+
+        if (isRootLeaf) {
+          if (leaf.view instanceof MarkdownView) {
+            const file = leaf.view.file;
+            if (file instanceof TFile) {
+              this.lastActiveTabPath = file.path;
+            }
+          } else if (leaf.view.getViewType() === VIEW_TYPE_SPACE_DASHBOARD) {
+            this.lastActiveTabPath = undefined;
+          }
+        }
+      })
     );
 
     // Register custom views
@@ -373,22 +410,23 @@ export default class VirtualProjectSpacePlugin extends Plugin {
           }
         });
         
-        const activeFile = this.app.workspace.getActiveFile();
         await this.spaceManager.updateSpace(oldSpaceId, {
           workspace: {
             openTabs,
-            activeTab: activeFile?.path
+            activeTab: this.lastActiveTabPath
           }
         });
       }
     }
 
     // 2. Close all currently open markdown tabs
+    const leavesToDetach: WorkspaceLeaf[] = [];
     this.app.workspace.iterateRootLeaves((leaf) => {
       if (leaf.view.getViewType() === 'markdown') {
-        leaf.detach();
+        leavesToDetach.push(leaf);
       }
     });
+    leavesToDetach.forEach(leaf => leaf.detach());
 
     // 3. Switch active space and refresh UI views
     this.settings.activeSpaceId = spaceId;
@@ -397,32 +435,34 @@ export default class VirtualProjectSpacePlugin extends Plugin {
 
     // 4. Restore workspace layout state for the newly active space
     const newSpace = this.spaceManager.getSpace(spaceId);
+    let activeLeaf: WorkspaceLeaf | null = null;
     if (newSpace && newSpace.workspace && newSpace.workspace.openTabs) {
       const workspace = newSpace.workspace;
+      const activeTab = workspace.activeTab;
+      this.lastActiveTabPath = activeTab;
       for (const filePath of workspace.openTabs) {
         const file = this.app.vault.getAbstractFileByPath(filePath);
         if (file instanceof TFile) {
-          await this.app.workspace.getLeaf('tab').openFile(file);
-        }
-      }
-      
-      // Restore active focused tab if it exists
-      const activeTab = workspace.activeTab;
-      if (activeTab) {
-        this.app.workspace.iterateRootLeaves((leaf) => {
-          if (leaf.view instanceof MarkdownView) {
-            const file = leaf.view.file;
-            if (file instanceof TFile && file.path === activeTab) {
-              this.app.workspace.setActiveLeaf(leaf, { focus: true });
-            }
+          const leaf = this.app.workspace.getLeaf('tab');
+          await leaf.openFile(file);
+          if (filePath === activeTab) {
+            activeLeaf = leaf;
           }
-        });
+        }
       }
     }
 
     // Open Dashboard automatically on activation
     if (this.settings.enableDashboard) {
-      void this.openDashboard(spaceId);
+      await this.openDashboard(spaceId);
+    }
+
+    // Restore active focused tab if it exists
+    if (activeLeaf) {
+      const targetLeaf = activeLeaf;
+      window.setTimeout(() => {
+        void this.app.workspace.revealLeaf(targetLeaf);
+      }, 100);
     }
   }
 
