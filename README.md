@@ -13,14 +13,16 @@
 
 ### 🌟 主要功能
 - **虚拟项目空间 (Virtual Project Spaces)**：自由创建、编辑和删除项目空间。每个空间均支持自定义主题颜色、图标，并能够以非侵入式的方式关联现有的文件与文件夹。
-- **专属项目浏览器 (Space Explorer)**：提供独立的侧边栏视图，仅展示当前激活的项目空间及其关联的目录树结构，让您专注于当前任务。
+- **专属项目浏览器 (Space Explorer)**：提供独立的侧边栏视图，仅展示当前激活的项目空间及其关联的目录树结构，让您专注于当前任务。支持一键折叠所有文件夹，以及快速定位并高亮当前正在编辑的文件。
 - **自动项目控制面板 (Space Dashboard)**：
   - **美观的 Banner 头部**：采用现代化渐变设计与自定义图标。
   - **项目数据统计**：展示关联文件总数、待办任务数、关联规则数等关键指标。
   - **任务扫描器 (Task Scanner)**：自动扫描项目关联文件中的 Markdown 任务列表（`- [ ]`），支持在 Dashboard 中直接点击勾选同步修改源文件。
   - **备忘录区域 (Memo Area)**：记录与项目相关的备忘录和快速便签，支持 Markdown 渲染、图片附件、编辑、删除以及持久化存储。
   - **项目文件树与新建笔记**：在面板中以虚拟树的形式浏览文件，并支持一键在项目目录下快速新建笔记。
-- **工作区状态同步 (Workspace Sync)**：切换项目空间时，自动保存并还原上一次打开的标签页（Tabs），无缝衔接工作上下文。
+- **工作区状态同步与智能打开 (Workspace Sync & Smart Open)**：
+  - 切换项目空间时，自动保存并还原上一次打开的标签页（Tabs），无缝衔接工作上下文。
+  - 智能标签页打开：点击侧边栏文件树的笔记时，若当前已有打开的非空标签页，会在新标签页中打开，避免替换当前页。
 
 ---
 
@@ -56,14 +58,16 @@ npm run build
 
 ### 🌟 Key Features
 - **Virtual Project Spaces**: Create, edit, and delete project spaces freely. Each space supports custom theme colors, icons, and non-intrusively links existing files and folders.
-- **Dedicated Project Explorer (Space Explorer)**: A dedicated sidebar view showing only the currently active project space and its associated directory tree, keeping you focused on the task at hand.
+- **Dedicated Project Explorer (Space Explorer)**: A dedicated sidebar view showing only the currently active project space and its associated directory tree, keeping you focused on the task at hand. Supports collapsing all folders with one click, and quickly locating/highlighting the note currently being edited.
 - **Auto-generated Project Dashboard (Space Dashboard)**:
   - **Stunning Banner Header**: Features a modern gradient header with custom icons.
   - **Project Statistics**: Display key metrics such as total associated files, pending tasks, and association rules.
   - **Task Scanner**: Automatically scans for Markdown checklist items (`- [ ]`) across all associated files. Check/uncheck them directly on the dashboard to update the source files.
   - **Memo Area**: Keep project-specific memos and quick notes. Supports Markdown rendering, image attachments, editing, deletion, and data persistence.
   - **Virtual File Tree & Quick Notes**: Browse project files in a virtual tree and create new notes under the project directory with one click.
-- **Workspace State Sync**: Automatically saves and restores open tabs when switching between project spaces, preserving your work context seamlessly.
+- **Workspace State Sync & Smart Tab Opening**:
+  - Automatically saves and restores open tabs when switching between project spaces, preserving your work context seamlessly.
+  - Smart Tab Opening: Clicking a note in the explorer tree automatically opens it in a new tab if the current tab is not empty, preventing overwriting your current work.
 
 ---
 
